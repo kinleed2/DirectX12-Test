@@ -37,13 +37,10 @@ struct MaterialData
     float    Roughness;
     float4x4 MatTransform;
     uint     DiffuseMapIndex;
-    uint     MatPad0;
+    uint     NormalMapIndex;
     uint     MatPad1;
     uint     MatPad2;
 };
-
-
-
 
 // An array of textures, which is only supported in shader model 5.1+.  Unlike Texture2DArray, the textures
 // in this array can be different sizes and formats, making it more flexible than texture arrays.
@@ -51,7 +48,9 @@ struct MaterialData
 // sky box
 TextureCube gCubeMap : register(t0);
 
-Texture2D gDiffuseMap[7] : register(t1);
+Texture2D gShadowMap : register(t1);
+
+Texture2D gTextureMaps[] : register(t3);
 
 //Texture2DArray gTreeMapArray : register(t1);
 
@@ -110,4 +109,24 @@ cbuffer cbPass : register(b1)
     Light gLights[MaxLights];
 };
 
+//---------------------------------------------------------------------------------------
+// Transforms a normal map sample to world space.
+//---------------------------------------------------------------------------------------
+float3 NormalSampleToWorldSpace(float3 normalMapSample, float3 unitNormalW, float3 tangentW)
+{
+    // Uncompress each component from [0,1] to [-1,1].
+    float3 normalT = 2.0f * normalMapSample - 1.0f;
+
+    // Build orthonormal basis.
+    float3 N = unitNormalW;
+    float3 T = normalize(tangentW - dot(tangentW, N) * N);
+    float3 B = cross(N, T);
+
+    float3x3 TBN = float3x3(T, B, N);
+
+    // Transform from tangent space to world space.
+    float3 bumpedNormalW = mul(normalT, TBN);
+
+    return bumpedNormalW;
+}
 
