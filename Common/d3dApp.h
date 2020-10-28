@@ -126,8 +126,8 @@ protected:
 	std::wstring mMainWndCaption = L"Demo";
 	D3D_DRIVER_TYPE md3dDriverType = D3D_DRIVER_TYPE_HARDWARE;
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D32_FLOAT;
+    DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    //DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D32_FLOAT;
     int mClientWidth = 800;
 	int mClientHeight = 600;
 

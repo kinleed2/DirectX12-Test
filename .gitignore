@@ -102,3 +102,5 @@ DirectX12/x64/Debug/vc142.idb
 DirectX12/x64/Debug/vc142.pdb
 DirectX12/x64/Debug/Vector3.obj
 DirectX12/x64/Debug/Waves.obj
+DirectX12/.vs/DirectX12/v16/ipch/AutoPCH/efb1d1e9034077ca/MAIN.ipch
+DirectX12/x64/Debug/main.obj

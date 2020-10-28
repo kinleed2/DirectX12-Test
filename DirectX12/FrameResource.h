@@ -83,8 +83,8 @@ struct MaterialData
 
     UINT DiffuseMapIndex = 0;
     UINT NormalMapIndex = 0;
+    UINT MaterialPad0;
     UINT MaterialPad1;
-    UINT MaterialPad2;
 };
 
 struct InstanceData
@@ -130,12 +130,12 @@ public:
 	std::unique_ptr<UploadBuffer<MaterialData>> MaterialBuffer = nullptr;
     std::unique_ptr<UploadBuffer<ObjectConstants>> ObjectCB = nullptr;
 
-    std::unique_ptr<UploadBuffer<SkinnedConstants>> SkinnedCB = nullptr;
-    std::unique_ptr<UploadBuffer<SsaoConstants>> SsaoCB = nullptr;
+    //std::unique_ptr<UploadBuffer<SkinnedConstants>> SkinnedCB = nullptr;
+    //std::unique_ptr<UploadBuffer<SsaoConstants>> SsaoCB = nullptr;
 
     // We cannot update a dynamic vertex buffer until the GPU is done processing
     // the commands that reference it.  So each frame needs their own.
-    std::unique_ptr<UploadBuffer<Vertex>> WavesVB = nullptr;
+    //std::unique_ptr<UploadBuffer<Vertex>> WavesVB = nullptr;
 
     // NOTE: In this demo, we instance only one render-item, so we only have one structured buffer to 
     // store instancing data.  To make this more general (i.e., to support instancing multiple render-items), 

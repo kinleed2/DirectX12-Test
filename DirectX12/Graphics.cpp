@@ -3,32 +3,6 @@
 
 const int gNumFrameResources = 3;
 
-const UINT CubeMapSize = 512;
-
-
-int WINAPI main(HINSTANCE hInstance, HINSTANCE prevInstance,
-    PSTR cmdLine, int showCmd)
-{
-    // Enable run-time memory check for debug builds.
-#if defined(DEBUG) | defined(_DEBUG)
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
-
-    try
-    {
-        Graphics theApp(hInstance);
-        if (!theApp.Initialize())
-            return 0;
-
-        return theApp.Run();
-    }
-    catch (DxException& e)
-    {
-        MessageBox(nullptr, e.ToString().c_str(), L"HR Failed", MB_OK);
-        return 0;
-    }
-}
-
 Graphics::Graphics(HINSTANCE hInstance)
     : D3DApp(hInstance)
 {
@@ -76,10 +50,11 @@ bool Graphics::Initialize()
     //BuildLandGeometry();
     //BuildWavesGeometry();
     //BuildBoxGeometry();
-    BuildFrameResources();
+
     BuildMaterials();
     BuildRenderItems();
     BuildInstanceRenderItems();
+    BuildFrameResources();
     BuildPSOs();
 
     // Execute the initialization commands.
@@ -166,40 +141,18 @@ void Graphics::Draw(const GameTimer& gt)
     // Reusing the command list reuses memory.
     ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
 
-
-
-    // Clear the back buffer and depth buffer.
-    mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
-    mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-
-    // Specify the buffers we are going to render to.
-    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
-
     ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvDescriptorHeap.Get() };
     mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
     mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
-
-    auto passCB = mCurrFrameResource->PassCB->Resource();
-    mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 
     // Bind all the materials used in this scene.  For structured buffers, we can bypass the heap and 
     // set as a root descriptor.
     auto matBuffer = mCurrFrameResource->MaterialBuffer->Resource();
     mCommandList->SetGraphicsRootShaderResourceView(3, matBuffer->GetGPUVirtualAddress());
 
-
     // Bind null SRV for shadow map pass.
-    mCommandList->SetGraphicsRootDescriptorTable(6, mNullSrv);
-
-    // Bind the sky cube map.  For our demos, we just use one "world" cube map representing the environment
-    // from far away, so all objects will use the same cube map and we only need to set it once per-frame.  
-    // If we wanted to use "local" cube maps, we would have to change them per-object, or dynamically
-    // index into an array of cube maps.
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE skyTexDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvDescriptorSize);
-    mCommandList->SetGraphicsRootDescriptorTable(4, skyTexDescriptor);
+    mCommandList->SetGraphicsRootDescriptorTable(4, mNullSrv);
 
     // Bind all the textures used in this scene.  Observe
     // that we only have to specify the first descriptor in the table.  
@@ -215,6 +168,26 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
         D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
+    // Clear the back buffer and depth buffer.
+    mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
+    mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+    // Specify the buffers we are going to render to.
+    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+
+
+    auto passCB = mCurrFrameResource->PassCB->Resource();
+    mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
+
+    // Bind the sky cube map.  For our demos, we just use one "world" cube map representing the environment
+    // from far away, so all objects will use the same cube map and we only need to set it once per-frame.  
+    // If we wanted to use "local" cube maps, we would have to change them per-object, or dynamically
+    // index into an array of cube maps.
+    CD3DX12_GPU_DESCRIPTOR_HANDLE skyTexDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(4, skyTexDescriptor);
+
+    mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
 
     mCommandList->SetPipelineState(mPSOs["instance"].Get());
@@ -280,17 +253,10 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
 {
     const float dt = gt.DeltaTime();
 
-    if (GetAsyncKeyState('A') & 0x8000) mBoxTranslation.x -= 10.0f * dt;
-    if (GetAsyncKeyState('D') & 0x8000) mBoxTranslation.x += 10.0f * dt;
-    if (GetAsyncKeyState('W') & 0x8000) mBoxTranslation.z += 10.0f * dt;
-    if (GetAsyncKeyState('S') & 0x8000) mBoxTranslation.z -= 10.0f * dt;
-    if (GetAsyncKeyState('R') & 0x8000) mBoxTranslation.y += 10.0f * dt;
-    if (GetAsyncKeyState('F') & 0x8000) mBoxTranslation.y -= 10.0f * dt;
-
-    if (GetAsyncKeyState(VK_UP) & 0x8000) mCamera.Walk(10.0f * dt);
-    if (GetAsyncKeyState(VK_DOWN) & 0x8000) mCamera.Walk(-10.0f * dt);
-    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) mCamera.Strafe(10.0f * dt);
-    if (GetAsyncKeyState(VK_LEFT) & 0x8000) mCamera.Strafe(-10.0f * dt);
+    if (GetAsyncKeyState('W') & 0x8000) mCamera.Walk(10.0f * dt);
+    if (GetAsyncKeyState('S') & 0x8000) mCamera.Walk(-10.0f * dt);
+    if (GetAsyncKeyState('D') & 0x8000) mCamera.Strafe(10.0f * dt);
+    if (GetAsyncKeyState('A') & 0x8000) mCamera.Strafe(-10.0f * dt);
 
     if (GetAsyncKeyState('1') & 0x8000)
     {
@@ -306,28 +272,16 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
     }
     mCamera.UpdateViewMatrix();
 
-    //// Update the new world matrix
-    //XMMATRIX boxRotate = XMMatrixRotationY(0.5f * MathHelper::Pi);
-    //XMMATRIX boxScale = XMMatrixScaling(1.0f, 1.0f, 1.0f);
-    //XMMATRIX boxOffset = XMMatrixTranslation(mBoxTranslation.x, mBoxTranslation.y, mBoxTranslation.z);
-    //XMMATRIX boxWorld = boxRotate * boxScale * boxOffset;
-    //XMStoreFloat4x4(&mBoxRitem->World, boxWorld);
+    if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle += 0.1f;
+    if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle += 0.1f;
 
-    //// Update reflection world matrix
-    //XMVECTOR mirrorPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    //XMMATRIX R = XMMatrixReflect(mirrorPlane);
-    //XMStoreFloat4x4(&mReflectedBoxRitem->World, boxWorld * R);
-
-    // Upadte shadow world matrix
-    //XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    //XMVECTOR toMainLight = -XMLoadFloat3(&mMainPassCB.Lights[0].Direction);
-    //XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
-    //XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
-    //XMStoreFloat4x4(&mShadowBoxRitem->World, boxWorld * S * shadowOffsetY);
-
-    //mBoxRitem->NumFramesDirty = gNumFrameResources;
-    //mReflectedBoxRitem->NumFramesDirty = gNumFrameResources;
-    //mShadowBoxRitem->NumFramesDirty = gNumFrameResources;
+    XMMATRIX R = XMMatrixRotationY(mLightRotationAngle);
+    for (int i = 0; i < 3; ++i)
+    {
+        XMVECTOR lightDir = XMLoadFloat3(&mBaseLightDirections[i]);
+        lightDir = XMVector3TransformNormal(lightDir, R);
+        XMStoreFloat3(&mRotatedLightDirections[i], lightDir);
+    }
 }
 
 void Graphics::AnimateMaterials(const GameTimer& gt)
@@ -461,45 +415,45 @@ void Graphics::UpdateReflectedPassCB(const GameTimer& gt)
     currPassCB->CopyData(1, mReflectedPassCB);
 }
 
-void Graphics::UpdateWaves(const GameTimer& gt)
-{
-    // Every quarter second, generate a random wave.
-    static float t_base = 0.0f;
-    if ((mTimer.TotalTime() - t_base) >= 0.25f)
-    {
-        t_base += 0.25f;
-
-        int i = MathHelper::Rand(4, mWaves->RowCount() - 5);
-        int j = MathHelper::Rand(4, mWaves->ColumnCount() - 5);
-
-        float r = MathHelper::RandF(0.2f, 0.5f);
-
-        mWaves->Disturb(i, j, r);
-    }
-
-    // Update the wave simulation.
-    mWaves->Update(gt.DeltaTime());
-
-    // Update the wave vertex buffer with the new solution.
-    auto currWavesVB = mCurrFrameResource->WavesVB.get();
-    for (int i = 0; i < mWaves->VertexCount(); ++i)
-    {
-        Vertex v;
-
-        v.Pos = mWaves->Position(i);
-        v.Normal = mWaves->Normal(i);
-
-        // Derive tex-coords from position by 
-        // mapping [-w/2,w/2] --> [0,1]
-        v.TexC.x = 0.5f + v.Pos.x / mWaves->Width();
-        v.TexC.y = 0.5f - v.Pos.z / mWaves->Depth();
-
-        currWavesVB->CopyData(i, v);
-    }
-
-    // Set the dynamic VB of the wave renderitem to the current frame VB.
-    mWavesRitem->Geo->VertexBufferGPU = currWavesVB->Resource();
-}
+//void Graphics::UpdateWaves(const GameTimer& gt)
+//{
+//    // Every quarter second, generate a random wave.
+//    static float t_base = 0.0f;
+//    if ((mTimer.TotalTime() - t_base) >= 0.25f)
+//    {
+//        t_base += 0.25f;
+//
+//        int i = MathHelper::Rand(4, mWaves->RowCount() - 5);
+//        int j = MathHelper::Rand(4, mWaves->ColumnCount() - 5);
+//
+//        float r = MathHelper::RandF(0.2f, 0.5f);
+//
+//        mWaves->Disturb(i, j, r);
+//    }
+//
+//    // Update the wave simulation.
+//    mWaves->Update(gt.DeltaTime());
+//
+//    // Update the wave vertex buffer with the new solution.
+//    auto currWavesVB = mCurrFrameResource->WavesVB.get();
+//    for (int i = 0; i < mWaves->VertexCount(); ++i)
+//    {
+//        Vertex v;
+//
+//        v.Pos = mWaves->Position(i);
+//        v.Normal = mWaves->Normal(i);
+//
+//        // Derive tex-coords from position by 
+//        // mapping [-w/2,w/2] --> [0,1]
+//        v.TexC.x = 0.5f + v.Pos.x / mWaves->Width();
+//        v.TexC.y = 0.5f - v.Pos.z / mWaves->Depth();
+//
+//        currWavesVB->CopyData(i, v);
+//    }
+//
+//    // Set the dynamic VB of the wave renderitem to the current frame VB.
+//    mWavesRitem->Geo->VertexBufferGPU = currWavesVB->Resource();
+//}
 
 void Graphics::UpdateInstanceData(const GameTimer& gt)
 {
@@ -879,7 +833,7 @@ void Graphics::BuildRootSignature()
     texTable[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
 
     // texture
-    texTable[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, mTextures.size(), 1, 0);
+    texTable[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, mTextures.size(), 2, 0);
 
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[6];
@@ -929,7 +883,7 @@ void Graphics::BuildDescriptorHeaps()
     // Create the SRV heap.
     //
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = mTextures.size();
+    srvHeapDesc.NumDescriptors = mTextures.size() + 4;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -985,6 +939,34 @@ void Graphics::BuildDescriptorHeaps()
     md3dDevice->CreateShaderResourceView(skyTex.Get(), &srvDesc, hDescriptor);
 
     mSkyTexHeapIndex = (UINT)tex2DList.size();
+
+    mShadowMapHeapIndex = mSkyTexHeapIndex + 1;
+
+    mNullCubeSrvIndex = mShadowMapHeapIndex + 1;
+    mNullTexSrvIndex = mNullCubeSrvIndex + 1;
+
+    auto srvCpuStart = mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    auto srvGpuStart = mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    auto dsvCpuStart = mDsvHeap->GetCPUDescriptorHandleForHeapStart();
+
+
+    auto nullSrv = CD3DX12_CPU_DESCRIPTOR_HANDLE(srvCpuStart, mNullCubeSrvIndex, mCbvSrvUavDescriptorSize);
+    mNullSrv = CD3DX12_GPU_DESCRIPTOR_HANDLE(srvGpuStart, mNullCubeSrvIndex, mCbvSrvUavDescriptorSize);
+
+    md3dDevice->CreateShaderResourceView(nullptr, &srvDesc, nullSrv);
+    nullSrv.Offset(1, mCbvSrvUavDescriptorSize);
+
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    md3dDevice->CreateShaderResourceView(nullptr, &srvDesc, nullSrv);
+
+    mShadowMap->BuildDescriptors(
+        CD3DX12_CPU_DESCRIPTOR_HANDLE(srvCpuStart, mShadowMapHeapIndex, mCbvSrvUavDescriptorSize),
+        CD3DX12_GPU_DESCRIPTOR_HANDLE(srvGpuStart, mShadowMapHeapIndex, mCbvSrvUavDescriptorSize),
+        CD3DX12_CPU_DESCRIPTOR_HANDLE(dsvCpuStart, 1, mDsvDescriptorSize));
 }
 
 void Graphics::BuildShadersAndInputLayout()
@@ -997,7 +979,6 @@ void Graphics::BuildShadersAndInputLayout()
 
     const D3D_SHADER_MACRO alphaTestDefines[] =
     {
-        "FOG", "1",
         "ALPHA_TEST", "1",
         NULL, NULL
     };
@@ -1015,6 +996,10 @@ void Graphics::BuildShadersAndInputLayout()
 
     mShaders["skyVS"] = d3dUtil::CompileShader(L"Shaders\\Sky.hlsl", nullptr, "VS", "vs_5_1");
     mShaders["skyPS"] = d3dUtil::CompileShader(L"Shaders\\Sky.hlsl", nullptr, "PS", "ps_5_1");
+
+    mShaders["shadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "VS", "vs_5_1");
+    mShaders["shadowOpaquePS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "PS", "ps_5_1");
+    mShaders["shadowAlphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", alphaTestDefines, "PS", "ps_5_1");
 
 
     mStdInputLayout =
@@ -1037,9 +1022,9 @@ void Graphics::BuildShadersAndInputLayout()
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        //{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        //{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        //{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 }
 
@@ -1534,6 +1519,30 @@ void Graphics::BuildPSOs()
     opaquePsoDesc.DSVFormat = mDepthStencilFormat;
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
+    //
+    // PSO for shadow map pass.
+    //
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC smapPsoDesc = opaquePsoDesc;
+    smapPsoDesc.RasterizerState.DepthBias = 100000;
+    smapPsoDesc.RasterizerState.DepthBiasClamp = 0.0f;
+    smapPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
+    smapPsoDesc.pRootSignature = mRootSignature.Get();
+    smapPsoDesc.VS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["shadowVS"]->GetBufferPointer()),
+        mShaders["shadowVS"]->GetBufferSize()
+    };
+    smapPsoDesc.PS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["shadowOpaquePS"]->GetBufferPointer()),
+        mShaders["shadowOpaquePS"]->GetBufferSize()
+    };
+
+    // Shadow map pass does not have a render target.
+    smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
+    smapPsoDesc.NumRenderTargets = 0;   
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&mPSOs["shadow_opaque"])));
+
     // PSO for Instance objects
     D3D12_GRAPHICS_PIPELINE_STATE_DESC InstanceOpaquePsoDesc = opaquePsoDesc;
     InstanceOpaquePsoDesc.VS =
@@ -1547,6 +1556,9 @@ void Graphics::BuildPSOs()
         mShaders["InstanceOpaquePS"]->GetBufferSize()
     };
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&InstanceOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["instance"])));
+
+    
+
 
     //
     // PSO for sky.
@@ -1658,31 +1670,6 @@ void Graphics::BuildPSOs()
     //drawReflectionsPsoDesc.RasterizerState.FrontCounterClockwise = true;
     //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&drawReflectionsPsoDesc, IID_PPV_ARGS(&mPSOs["drawReflections"])));
 
-    // PSO for shadow
-
-    //D3D12_DEPTH_STENCIL_DESC shadowDDS;
-    //shadowDDS.DepthEnable = true;
-    //shadowDDS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    //shadowDDS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-    //shadowDDS.StencilEnable = true;
-    //shadowDDS.StencilReadMask = 0xff;
-    //shadowDDS.StencilWriteMask = 0xff;
-
-    //shadowDDS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //shadowDDS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //shadowDDS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
-    //shadowDDS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-    //shadowDDS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //shadowDDS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //shadowDDS.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-    //shadowDDS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDecs = transparentPsoDesc;
-    //shadowPsoDecs.DepthStencilState = shadowDDS;
-
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDecs, IID_PPV_ARGS(&mPSOs["shadow"])));
-
     // PSO for tree sprites
     //D3D12_GRAPHICS_PIPELINE_STATE_DESC treeSpritePsoDesc = opaquePsoDesc;
     //treeSpritePsoDesc.VS =
@@ -1706,6 +1693,7 @@ void Graphics::BuildPSOs()
 
     //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&treeSpritePsoDesc, IID_PPV_ARGS(&mPSOs["treeSprites"])));
 
+    
 }
 
 void Graphics::BuildFrameResources()
@@ -1713,7 +1701,7 @@ void Graphics::BuildFrameResources()
     for (int i = 0; i < gNumFrameResources; ++i)
     {
         mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-            1, mAllRitems.size(), mInstanceCount, (UINT)mMaterials.size()));
+            2, (UINT)mAllRitems.size(), mInstanceCount, (UINT)mMaterials.size()));
     }
 }
 

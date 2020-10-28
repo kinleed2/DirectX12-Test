@@ -91,7 +91,7 @@ float4 PS(VertexOut pin) : SV_Target
     float3 bumpedNormalW = NormalSampleToWorldSpace(normalMapSample.rgb, pin.NormalW, pin.TangentW);
 
     // Uncomment to turn off normal mapping.
-    //bumpedNormalW = pin.NormalW;
+    bumpedNormalW = pin.NormalW;
 
     // Dynamically look up the texture in the array.
     diffuseAlbedo *= gTextureMaps[diffuseTexIndex].Sample(gsamAnisotropicWrap, pin.TexC);

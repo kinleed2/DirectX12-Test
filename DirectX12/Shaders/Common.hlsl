@@ -38,19 +38,21 @@ struct MaterialData
     float4x4 MatTransform;
     uint     DiffuseMapIndex;
     uint     NormalMapIndex;
+    uint     MatPad0;
     uint     MatPad1;
-    uint     MatPad2;
 };
 
-// An array of textures, which is only supported in shader model 5.1+.  Unlike Texture2DArray, the textures
-// in this array can be different sizes and formats, making it more flexible than texture arrays.
+
 
 // sky box
 TextureCube gCubeMap : register(t0);
 
 Texture2D gShadowMap : register(t1);
 
-Texture2D gTextureMaps[] : register(t3);
+// An array of textures, which is only supported in shader model 5.1+.  Unlike Texture2DArray, the textures
+// in this array can be different sizes and formats, making it more flexible than texture arrays.
+
+Texture2D gTextureMaps[] : register(t2);
 
 //Texture2DArray gTreeMapArray : register(t1);
 
@@ -66,6 +68,8 @@ SamplerState gsamLinearWrap       : register(s2);
 SamplerState gsamLinearClamp      : register(s3);
 SamplerState gsamAnisotropicWrap  : register(s4);
 SamplerState gsamAnisotropicClamp : register(s5);
+SamplerComparisonState gsamShadow : register(s6);
+
 
 // Constant data that varies per frame.
 cbuffer cbPerObject : register(b0)

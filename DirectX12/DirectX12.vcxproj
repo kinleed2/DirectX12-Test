@@ -155,6 +155,7 @@
     <ClCompile Include="FrameResource.cpp" />
     <ClCompile Include="Graphics.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
+    <ClCompile Include="Shaders\main.cpp" />
     <ClCompile Include="ShadowMap.cpp" />
     <ClCompile Include="SkinnedData.cpp" />
     <ClCompile Include="Waves.cpp" />
@@ -220,6 +221,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\InstanceDefault.hlsl">
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\Shadow.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <FileType>Document</FileType>
     </None>
   </ItemGroup>
