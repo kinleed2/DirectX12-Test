@@ -31,7 +31,7 @@ bool Graphics::Initialize()
 
     // Get the increment size of a descriptor in this heap type.  This is hardware specific, 
     // so we have to query this information.
-    mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    //mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     mWaves = std::make_unique<Waves>(128, 128, 1.0f, 0.03f, 4.0f, 0.2f);
 
@@ -175,7 +175,6 @@ void Graphics::Draw(const GameTimer& gt)
     // Specify the buffers we are going to render to.
     mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
-
     auto passCB = mCurrFrameResource->PassCB->Resource();
     mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 
@@ -184,11 +183,14 @@ void Graphics::Draw(const GameTimer& gt)
     // If we wanted to use "local" cube maps, we would have to change them per-object, or dynamically
     // index into an array of cube maps.
     CD3DX12_GPU_DESCRIPTOR_HANDLE skyTexDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvDescriptorSize);
+    skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvUavDescriptorSize);
     mCommandList->SetGraphicsRootDescriptorTable(4, skyTexDescriptor);
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+
+    mCommandList->SetPipelineState(mPSOs["debug"].Get());
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
 
     mCommandList->SetPipelineState(mPSOs["instance"].Get());
     DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
@@ -272,8 +274,8 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
     }
     mCamera.UpdateViewMatrix();
 
-    if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle += 0.1f;
-    if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle += 0.1f;
+    if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle += 1 * dt;
+    if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle -= 1 * dt;
 
     XMMATRIX R = XMMatrixRotationY(mLightRotationAngle);
     for (int i = 0; i < 3; ++i)
@@ -371,12 +373,17 @@ void Graphics::UpdateMainPassCB(const GameTimer& gt)
     XMMATRIX invProj = XMMatrixInverse(&XMMatrixDeterminant(proj), proj);
     XMMATRIX invViewProj = XMMatrixInverse(&XMMatrixDeterminant(viewProj), viewProj);
 
+    XMMATRIX shadowTransform = XMLoadFloat4x4(&mShadowTransform);
+
     XMStoreFloat4x4(&mMainPassCB.View, XMMatrixTranspose(view));
     XMStoreFloat4x4(&mMainPassCB.InvView, XMMatrixTranspose(invView));
     XMStoreFloat4x4(&mMainPassCB.Proj, XMMatrixTranspose(proj));
     XMStoreFloat4x4(&mMainPassCB.InvProj, XMMatrixTranspose(invProj));
     XMStoreFloat4x4(&mMainPassCB.ViewProj, XMMatrixTranspose(viewProj));
     XMStoreFloat4x4(&mMainPassCB.InvViewProj, XMMatrixTranspose(invViewProj));
+    
+    XMStoreFloat4x4(&mMainPassCB.ShadowTransform, XMMatrixTranspose(shadowTransform));
+    
     mMainPassCB.EyePosW = mCamera.GetPosition3f();
     mMainPassCB.RenderTargetSize = XMFLOAT2((float)mClientWidth, (float)mClientHeight);
     mMainPassCB.InvRenderTargetSize = XMFLOAT2(1.0f / mClientWidth, 1.0f / mClientHeight);
@@ -385,11 +392,11 @@ void Graphics::UpdateMainPassCB(const GameTimer& gt)
     mMainPassCB.TotalTime = gt.TotalTime();
     mMainPassCB.DeltaTime = gt.DeltaTime();
     mMainPassCB.AmbientLight = { 0.25f, 0.25f, 0.35f, 1.0f };
-    mMainPassCB.Lights[0].Direction = { 0.57735f, -0.57735f, 0.57735f };
-    mMainPassCB.Lights[0].Strength = { 0.8f, 0.8f, 0.8f };
-    mMainPassCB.Lights[1].Direction = { -0.57735f, -0.57735f, 0.57735f };
+    mMainPassCB.Lights[0].Direction = mRotatedLightDirections[0];
+    mMainPassCB.Lights[0].Strength = { 0.9f, 0.8f, 0.7f };
+    mMainPassCB.Lights[1].Direction = mRotatedLightDirections[1];
     mMainPassCB.Lights[1].Strength = { 0.4f, 0.4f, 0.4f };
-    mMainPassCB.Lights[2].Direction = { 0.0f, -0.707f, -0.707f };
+    mMainPassCB.Lights[2].Direction = mRotatedLightDirections[2];
     mMainPassCB.Lights[2].Strength = { 0.2f, 0.2f, 0.2f };
 
     auto currPassCB = mCurrFrameResource->PassCB.get();
@@ -574,46 +581,11 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
     currPassCB->CopyData(1, mShadowPassCB);
 }
 
-//void Graphics::UpdateCubeMapFacePassCBs()
-//{
-//    for (int i = 0; i < 6; ++i)
-//    {
-//        PassConstants cubeFacePassCB = mMainPassCB;
-//
-//        XMMATRIX view = mCubeMapCamera[i].GetView();
-//        XMMATRIX proj = mCubeMapCamera[i].GetProj();
-//
-//        XMMATRIX viewProj = XMMatrixMultiply(view, proj);
-//        XMMATRIX invView = XMMatrixInverse(&XMMatrixDeterminant(view), view);
-//        XMMATRIX invProj = XMMatrixInverse(&XMMatrixDeterminant(proj), proj);
-//        XMMATRIX invViewProj = XMMatrixInverse(&XMMatrixDeterminant(viewProj), viewProj);
-//
-//        XMStoreFloat4x4(&cubeFacePassCB.View, XMMatrixTranspose(view));
-//        XMStoreFloat4x4(&cubeFacePassCB.InvView, XMMatrixTranspose(invView));
-//        XMStoreFloat4x4(&cubeFacePassCB.Proj, XMMatrixTranspose(proj));
-//        XMStoreFloat4x4(&cubeFacePassCB.InvProj, XMMatrixTranspose(invProj));
-//        XMStoreFloat4x4(&cubeFacePassCB.ViewProj, XMMatrixTranspose(viewProj));
-//        XMStoreFloat4x4(&cubeFacePassCB.InvViewProj, XMMatrixTranspose(invViewProj));
-//        cubeFacePassCB.EyePosW = mCubeMapCamera[i].GetPosition3f();
-//        cubeFacePassCB.RenderTargetSize = XMFLOAT2((float)CubeMapSize, (float)CubeMapSize);
-//        cubeFacePassCB.InvRenderTargetSize = XMFLOAT2(1.0f / CubeMapSize, 1.0f / CubeMapSize);
-//
-//        auto currPassCB = mCurrFrameResource->PassCB.get();
-//
-//        // Cube map pass cbuffers are stored in elements 1-6.
-//        currPassCB->CopyData(1 + i, cubeFacePassCB);
-//    }
-//}
 
 void Graphics::LoadContents()
 {
-    //LoadTextures(L"../Textures/grass.dds", "grassTex");
-    //LoadTextures(L"../Textures/water1.dds", "waterTex");
-    //LoadTextures(L"../Textures/WireFence.dds", "fenceTex");
-    //LoadTextures(L"../Textures/treearray.dds", "treeArrayTex");
 
-    LoadModelData(L"../朷槷潨寧惉彈.fbx", "model1");
-    //LoadModel(L"../朷槷潨寧惉彈.fbx");
+    LoadModelData(L"../望舒撩月成女.fbx", "model1");
 
     std::vector<std::string> texNames =
     {
@@ -883,7 +855,7 @@ void Graphics::BuildDescriptorHeaps()
     // Create the SRV heap.
     //
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = mTextures.size() + 4;
+    srvHeapDesc.NumDescriptors = mTextures.size() * 2;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -949,7 +921,6 @@ void Graphics::BuildDescriptorHeaps()
     auto srvGpuStart = mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
     auto dsvCpuStart = mDsvHeap->GetCPUDescriptorHandleForHeapStart();
 
-
     auto nullSrv = CD3DX12_CPU_DESCRIPTOR_HANDLE(srvCpuStart, mNullCubeSrvIndex, mCbvSrvUavDescriptorSize);
     mNullSrv = CD3DX12_GPU_DESCRIPTOR_HANDLE(srvGpuStart, mNullCubeSrvIndex, mCbvSrvUavDescriptorSize);
 
@@ -1000,6 +971,9 @@ void Graphics::BuildShadersAndInputLayout()
     mShaders["shadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "VS", "vs_5_1");
     mShaders["shadowOpaquePS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "PS", "ps_5_1");
     mShaders["shadowAlphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", alphaTestDefines, "PS", "ps_5_1");
+
+    mShaders["debugVS"] = d3dUtil::CompileShader(L"Shaders\\ShadowDebug.hlsl", nullptr, "VS", "vs_5_1");
+    mShaders["debugPS"] = d3dUtil::CompileShader(L"Shaders\\ShadowDebug.hlsl", nullptr, "PS", "ps_5_1");
 
 
     mStdInputLayout =
@@ -1258,6 +1232,7 @@ void Graphics::BuildShapeGeometry()
     GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 30.0f, 60, 40);
     GeometryGenerator::MeshData sphere = geoGen.CreateSphere(0.5f, 20, 20);
     GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.5f, 0.3f, 3.0f, 20, 20);
+    GeometryGenerator::MeshData quad = geoGen.CreateQuad(0.0f, 0.0f, 1.0f, 1.0f, 0.0f);
 
     //
     // We are concatenating all the geometry into one big vertex/index buffer.  So
@@ -1269,12 +1244,14 @@ void Graphics::BuildShapeGeometry()
     UINT gridVertexOffset = (UINT)box.Vertices.size();
     UINT sphereVertexOffset = gridVertexOffset + (UINT)grid.Vertices.size();
     UINT cylinderVertexOffset = sphereVertexOffset + (UINT)sphere.Vertices.size();
+    UINT quadVertexOffset = cylinderVertexOffset + (UINT)cylinder.Vertices.size();
 
     // Cache the starting index for each object in the concatenated index buffer.
     UINT boxIndexOffset = 0;
     UINT gridIndexOffset = (UINT)box.Indices32.size();
     UINT sphereIndexOffset = gridIndexOffset + (UINT)grid.Indices32.size();
     UINT cylinderIndexOffset = sphereIndexOffset + (UINT)sphere.Indices32.size();
+    UINT quadIndexOffset = cylinderIndexOffset + (UINT)cylinder.Indices32.size();
 
     SubmeshGeometry boxSubmesh;
     boxSubmesh.IndexCount = (UINT)box.Indices32.size();
@@ -1296,6 +1273,11 @@ void Graphics::BuildShapeGeometry()
     cylinderSubmesh.StartIndexLocation = cylinderIndexOffset;
     cylinderSubmesh.BaseVertexLocation = cylinderVertexOffset;
 
+    SubmeshGeometry quadSubmesh;
+    quadSubmesh.IndexCount = (UINT)quad.Indices32.size();
+    quadSubmesh.StartIndexLocation = quadIndexOffset;
+    quadSubmesh.BaseVertexLocation = quadVertexOffset;
+
     //
     // Extract the vertex elements we are interested in and pack the
     // vertices of all the meshes into one vertex buffer.
@@ -1305,7 +1287,8 @@ void Graphics::BuildShapeGeometry()
         box.Vertices.size() +
         grid.Vertices.size() +
         sphere.Vertices.size() +
-        cylinder.Vertices.size();
+        cylinder.Vertices.size() +
+        quad.Vertices.size();
 
     std::vector<Vertex> vertices(totalVertexCount);
 
@@ -1342,11 +1325,20 @@ void Graphics::BuildShapeGeometry()
         vertices[k].TangentU = cylinder.Vertices[i].TangentU;
     }
 
+    for (int i = 0; i < quad.Vertices.size(); ++i, ++k)
+    {
+        vertices[k].Pos = quad.Vertices[i].Position;
+        vertices[k].Normal = quad.Vertices[i].Normal;
+        vertices[k].TexC = quad.Vertices[i].TexC;
+        vertices[k].TangentU = quad.Vertices[i].TangentU;
+    }
+
     std::vector<std::uint16_t> indices;
     indices.insert(indices.end(), std::begin(box.GetIndices16()), std::end(box.GetIndices16()));
     indices.insert(indices.end(), std::begin(grid.GetIndices16()), std::end(grid.GetIndices16()));
     indices.insert(indices.end(), std::begin(sphere.GetIndices16()), std::end(sphere.GetIndices16()));
     indices.insert(indices.end(), std::begin(cylinder.GetIndices16()), std::end(cylinder.GetIndices16()));
+    indices.insert(indices.end(), std::begin(quad.GetIndices16()), std::end(quad.GetIndices16()));
 
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
@@ -1375,6 +1367,7 @@ void Graphics::BuildShapeGeometry()
     geo->DrawArgs["grid"] = gridSubmesh;
     geo->DrawArgs["sphere"] = sphereSubmesh;
     geo->DrawArgs["cylinder"] = cylinderSubmesh;
+    geo->DrawArgs["quad"] = quadSubmesh;
 
     mGeometries[geo->Name] = std::move(geo);
 }
@@ -1542,6 +1535,23 @@ void Graphics::BuildPSOs()
     smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
     smapPsoDesc.NumRenderTargets = 0;   
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&mPSOs["shadow_opaque"])));
+
+    //
+    // PSO for debug layer.
+    //
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC debugPsoDesc = opaquePsoDesc;
+    debugPsoDesc.pRootSignature = mRootSignature.Get();
+    debugPsoDesc.VS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["debugVS"]->GetBufferPointer()),
+        mShaders["debugVS"]->GetBufferSize()
+    };
+    debugPsoDesc.PS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["debugPS"]->GetBufferPointer()),
+        mShaders["debugPS"]->GetBufferSize()
+    };
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&debugPsoDesc, IID_PPV_ARGS(&mPSOs["debug"])));
 
     // PSO for Instance objects
     D3D12_GRAPHICS_PIPELINE_STATE_DESC InstanceOpaquePsoDesc = opaquePsoDesc;
@@ -1769,11 +1779,11 @@ void Graphics::BuildMaterials()
 
 void Graphics::BuildRenderItems()
 {
-
+    UINT objCBIndex = 0;
     auto skyRitem = std::make_unique<RenderItem>();
     XMStoreFloat4x4(&skyRitem->World, XMMatrixScaling(5000.0f, 5000.0f, 5000.0f));
     skyRitem->TexTransform = MathHelper::Identity4x4();
-    skyRitem->ObjCBIndex = 0;
+    skyRitem->ObjCBIndex = objCBIndex++;
     skyRitem->Mat = mMaterials["sky"].get();
     skyRitem->Geo = mGeometries["shapeGeo"].get();
     skyRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1784,10 +1794,24 @@ void Graphics::BuildRenderItems()
     mRitemLayer[(int)RenderLayer::Sky].push_back(skyRitem.get());
     mAllRitems.push_back(std::move(skyRitem));
 
+    auto quadRitem = std::make_unique<RenderItem>();
+    quadRitem->World = MathHelper::Identity4x4();
+    quadRitem->TexTransform = MathHelper::Identity4x4();
+    quadRitem->ObjCBIndex = objCBIndex++;
+    quadRitem->Mat = mMaterials["bricks0"].get();
+    quadRitem->Geo = mGeometries["shapeGeo"].get();
+    quadRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    quadRitem->IndexCount = quadRitem->Geo->DrawArgs["quad"].IndexCount;
+    quadRitem->StartIndexLocation = quadRitem->Geo->DrawArgs["quad"].StartIndexLocation;
+    quadRitem->BaseVertexLocation = quadRitem->Geo->DrawArgs["quad"].BaseVertexLocation;
+
+    mRitemLayer[(int)RenderLayer::Debug].push_back(quadRitem.get());
+    mAllRitems.push_back(std::move(quadRitem));
+
     auto boxRitem = std::make_unique<RenderItem>();
     XMStoreFloat4x4(&boxRitem->World, XMMatrixScaling(2.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f));
     XMStoreFloat4x4(&boxRitem->TexTransform, XMMatrixScaling(1.0f, 0.5f, 1.0f));
-    boxRitem->ObjCBIndex = 1;
+    boxRitem->ObjCBIndex = objCBIndex++;
     boxRitem->Mat = mMaterials["bricks0"].get();
     boxRitem->Geo = mGeometries["shapeGeo"].get();
     boxRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1801,7 +1825,7 @@ void Graphics::BuildRenderItems()
     auto globeRitem = std::make_unique<RenderItem>();
     XMStoreFloat4x4(&globeRitem->World, XMMatrixScaling(2.0f, 2.0f, 2.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
     XMStoreFloat4x4(&globeRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-    globeRitem->ObjCBIndex = 2;
+    globeRitem->ObjCBIndex = objCBIndex++;
     globeRitem->Mat = mMaterials["mirror0"].get();
     globeRitem->Geo = mGeometries["shapeGeo"].get();
     globeRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1815,7 +1839,7 @@ void Graphics::BuildRenderItems()
     auto gridRitem = std::make_unique<RenderItem>();
     gridRitem->World = MathHelper::Identity4x4();
     XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 8.0f, 1.0f));
-    gridRitem->ObjCBIndex = 3;
+    gridRitem->ObjCBIndex = objCBIndex++;
     gridRitem->Mat = mMaterials["tile0"].get();
     gridRitem->Geo = mGeometries["shapeGeo"].get();
     gridRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1827,7 +1851,7 @@ void Graphics::BuildRenderItems()
     mAllRitems.push_back(std::move(gridRitem));
 
     XMMATRIX brickTexTransform = XMMatrixScaling(1.5f, 2.0f, 1.0f);
-    UINT objCBIndex = 4;
+    
     for (int i = 0; i < 5; ++i)
     {
         auto leftCylRitem = std::make_unique<RenderItem>();
@@ -1991,9 +2015,6 @@ void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
 
         D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex*objCBByteSize;
 
-        // CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-        // tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-
         cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
 
         cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
@@ -2042,7 +2063,7 @@ void Graphics::DrawSceneToShadowMap()
     // Bind the pass constant buffer for the shadow map pass.
     auto passCB = mCurrFrameResource->PassCB->Resource();
     D3D12_GPU_VIRTUAL_ADDRESS passCBAddress = passCB->GetGPUVirtualAddress() + 1 * passCBByteSize;
-    mCommandList->SetGraphicsRootConstantBufferView(1, passCBAddress);
+    mCommandList->SetGraphicsRootConstantBufferView(2, passCBAddress);
 
     mCommandList->SetPipelineState(mPSOs["shadow_opaque"].Get());
 

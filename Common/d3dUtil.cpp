@@ -109,7 +109,7 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(
     {
         OutputDebugStringA("***************************************\n");
         OutputDebugStringA((char*)errors->GetBufferPointer());
-        OutputDebugStringA("\n***************************************\n");
+        OutputDebugStringA("***************************************\n");
     }
 	ThrowIfFailed(hr);
 

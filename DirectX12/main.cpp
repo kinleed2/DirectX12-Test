@@ -1,4 +1,4 @@
-#include "../Graphics.h"
+#include "Graphics.h"
 
 int WINAPI main(HINSTANCE hInstance, HINSTANCE prevInstance,
     PSTR cmdLine, int showCmd)

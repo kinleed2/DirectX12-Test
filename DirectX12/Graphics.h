@@ -125,7 +125,7 @@ enum class RenderLayer : int
 	AlphaTested,
 	AlphaTestedTreeSprites,
 	Debug,
-	Count,
+	Count
 };
 
 class Graphics : public D3DApp
@@ -200,8 +200,6 @@ private:
 	std::vector<std::unique_ptr<FrameResource>> mFrameResources;
 	FrameResource* mCurrFrameResource = nullptr;
 	int mCurrFrameResourceIndex = 0;
-
-	UINT mCbvSrvDescriptorSize = 0;
 
 	ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
 

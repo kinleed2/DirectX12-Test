@@ -154,8 +154,8 @@
     <ClCompile Include="CubeRenderTarget.cpp" />
     <ClCompile Include="FrameResource.cpp" />
     <ClCompile Include="Graphics.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
-    <ClCompile Include="Shaders\main.cpp" />
     <ClCompile Include="ShadowMap.cpp" />
     <ClCompile Include="SkinnedData.cpp" />
     <ClCompile Include="Waves.cpp" />
@@ -230,6 +230,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\ShadowDebug.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

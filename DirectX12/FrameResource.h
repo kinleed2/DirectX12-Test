@@ -23,6 +23,8 @@ struct PassConstants
     DirectX::XMFLOAT4X4 ViewProj = MathHelper::Identity4x4();
     DirectX::XMFLOAT4X4 InvViewProj = MathHelper::Identity4x4();
 
+    DirectX::XMFLOAT4X4 ShadowTransform = MathHelper::Identity4x4();
+
     DirectX::XMFLOAT3 EyePosW = { 0.0f, 0.0f, 0.0f };
     float cbPerObjectPad1 = 0.0f;
     
@@ -127,8 +129,9 @@ public:
     // that reference it.  So each frame needs their own cbuffers.
    // std::unique_ptr<UploadBuffer<FrameConstants>> FrameCB = nullptr;
     std::unique_ptr<UploadBuffer<PassConstants>> PassCB = nullptr;
-	std::unique_ptr<UploadBuffer<MaterialData>> MaterialBuffer = nullptr;
     std::unique_ptr<UploadBuffer<ObjectConstants>> ObjectCB = nullptr;
+
+    std::unique_ptr<UploadBuffer<MaterialData>> MaterialBuffer = nullptr;
 
     //std::unique_ptr<UploadBuffer<SkinnedConstants>> SkinnedCB = nullptr;
     //std::unique_ptr<UploadBuffer<SsaoConstants>> SsaoCB = nullptr;
