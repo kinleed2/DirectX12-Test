@@ -49,8 +49,8 @@ struct SkinnedVertex
 	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 TexC;
 	DirectX::XMFLOAT3 TangentU;
-	DirectX::XMFLOAT3 BoneWeights;
-	BYTE BoneIndices[4];
+	float BoneWeights;
+	std::vector<UINT> BoneIndices;
 };
 
 struct SkinnedModelInstance
@@ -177,6 +177,8 @@ private:
 	void processMesh(aiMesh* mesh, const aiScene* scene, std::vector<Vertex>& vertices, std::vector<std::uint16_t>& indices);
 	void LoadMaterialTextures(const aiScene* scene);
 
+	void LoadBoneOffsets(const aiMatrix4x4 aiMatrix, UINT num);
+
 	void LoadContents();
 	void LoadTextures(const std::wstring filename, const std::string texName);
 
@@ -291,4 +293,9 @@ private:
 
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
 	SkinnedData mSkinnedInfo;
+
+	std::unordered_map<int, std::vector<XMFLOAT4X4>> mBoneOffsets;
+
+	std::vector<UINT> mVertexId;
+	std::vector<float> mWeight;
 };

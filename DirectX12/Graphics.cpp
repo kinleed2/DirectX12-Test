@@ -2122,16 +2122,30 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     {
                         vertex.TexC = XMFLOAT2(mesh->mTextureCoords[0][i].x, -(mesh->mTextureCoords[0][i].y));
                     }
-                    if (mesh->HasBones())
-                    {
-                        ReadBoneOffsets(mesh, boneOffsets);
-                        ReadBoneHierarchy(mesh, boneIndexToParentIndex);
-                        ReadAnimationClips(mesh, numAnimationClips, animations);
-
-                        aiBone bone = ->
-                    }
+                    
 
                     vertices.push_back(vertex);
+                }
+
+                if (mesh->HasBones())
+                {
+                    for (size_t j = 0; j < mesh->mNumBones; j++)
+                    {
+                        aiBone* bone = mesh->mBones[j];
+
+                        LoadBoneOffsets(bone->mOffsetMatrix, meshNum);
+
+                        for (size_t k = 0; k < bone->mNumWeights; k++)
+                        {
+                            aiVertexWeight vertexWeight = bone->mWeights[k];
+
+                            vertices[vertexWeight.mVertexId].BoneWeights = vertexWeight.mWeight;
+                            vertices[vertexWeight.mVertexId].BoneIndices.push_back(j);
+                        }
+
+
+                    }
+
                 }
 
                 indices.reserve(mesh->mNumFaces * 3);
@@ -2363,37 +2377,25 @@ void Graphics::LoadMaterialTextures(const aiScene* scene)
     }
 }
 
-void Graphics::ReadBoneOffsets(const aiMesh* mesh, std::vector<XMFLOAT4X4>& boneOffsets)
+void Graphics::LoadBoneOffsets(const aiMatrix4x4 aiMatrix, UINT num)
 {
-    for (size_t i = 0; i < mesh->mNumBones; i++)
-    {
-        aiBone* bone = mesh->mBones[i];
-        boneOffsets[i](0, 0) = bone->mOffsetMatrix.a1;
-        boneOffsets[i](0, 1) = bone->mOffsetMatrix.a2;
-        boneOffsets[i](0, 2) = bone->mOffsetMatrix.a3;
-        boneOffsets[i](0, 3) = bone->mOffsetMatrix.a4;
-        boneOffsets[i](1, 0) = bone->mOffsetMatrix.b1;
-        boneOffsets[i](1, 1) = bone->mOffsetMatrix.b2;
-        boneOffsets[i](1, 2) = bone->mOffsetMatrix.b3;
-        boneOffsets[i](1, 3) = bone->mOffsetMatrix.b4;
-        boneOffsets[i](2, 0) = bone->mOffsetMatrix.c1;
-        boneOffsets[i](2, 1) = bone->mOffsetMatrix.c2;
-        boneOffsets[i](2, 2) = bone->mOffsetMatrix.c3;
-        boneOffsets[i](2, 3) = bone->mOffsetMatrix.c4;
-        boneOffsets[i](3, 0) = bone->mOffsetMatrix.d1;
-        boneOffsets[i](3, 1) = bone->mOffsetMatrix.d2;
-        boneOffsets[i](3, 2) = bone->mOffsetMatrix.d3;
-        boneOffsets[i](3, 3) = bone->mOffsetMatrix.d4;
-    }
-    
-}
-void Graphics::ReadBoneHierarchy(const aiMesh* mesh, std::vector<int>& boneIndexToParentIndex)
-{
+    XMFLOAT4X4 boneOffset;
+    boneOffset.m[0][0] = aiMatrix.a1;
+    boneOffset.m[0][1] = aiMatrix.a2;
+    boneOffset.m[0][2] = aiMatrix.a3;
+    boneOffset.m[0][3] = aiMatrix.a4;
+    boneOffset.m[1][0] = aiMatrix.b1;
+    boneOffset.m[1][1] = aiMatrix.b2;
+    boneOffset.m[1][2] = aiMatrix.b3;
+    boneOffset.m[1][3] = aiMatrix.b4;
+    boneOffset.m[2][0] = aiMatrix.c1;
+    boneOffset.m[2][1] = aiMatrix.c2;
+    boneOffset.m[2][2] = aiMatrix.c3;
+    boneOffset.m[2][3] = aiMatrix.c4;
+    boneOffset.m[3][0] = aiMatrix.d1;
+    boneOffset.m[3][1] = aiMatrix.d2;
+    boneOffset.m[3][2] = aiMatrix.d3;
+    boneOffset.m[3][3] = aiMatrix.d4;
 
-
-}
-void Graphics::ReadAnimationClips(const aiMesh* mesh, UINT numAnimationClips,
-    std::unordered_map<std::string, AnimationClip>& animations)
-{
-
+    mBoneOffsets[num].push_back(boneOffset);
 }
