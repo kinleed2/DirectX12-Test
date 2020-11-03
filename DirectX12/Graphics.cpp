@@ -274,8 +274,8 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
     }
     mCamera.UpdateViewMatrix();
 
-    if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle += 1 * dt;
-    if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle -= 1 * dt;
+    if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle -= 1 * dt;
+    if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle += 1 * dt;
 
     XMMATRIX R = XMMatrixRotationY(mLightRotationAngle);
     for (int i = 0; i < 3; ++i)
@@ -585,7 +585,7 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
 void Graphics::LoadContents()
 {
 
-    LoadModelData(L"../望舒撩月成女.fbx", "model1");
+    LoadModelData(L"../Models/jx32.fbx", "model1");
 
     std::vector<std::string> texNames =
     {
@@ -613,22 +613,27 @@ void Graphics::LoadContents()
     for (UINT i = 0; i < mModelMaterials.size(); ++i)
     {
         std::string diffuseName = mModelMaterials[i].DiffuseMapName;
-        std::string normalName = mModelMaterials[i].NormalMapName;
 
         std::wstring diffuseFilename = AnsiToWString(diffuseName);
-        std::wstring normalFilename = AnsiToWString(normalName);
 
         // strip off extension
         diffuseName = diffuseName.substr(0, diffuseName.find_last_of("."));
-        normalName = normalName.substr(0, normalName.find_last_of("."));
+       
 
         mModelTextureNames.push_back(diffuseName);
         texNames.push_back(diffuseName);
         texFilenames.push_back(diffuseFilename);
 
-        mModelTextureNames.push_back(normalName);
-        texNames.push_back(normalName);
-        texFilenames.push_back(normalFilename);
+
+        if (mModelMaterials[i].NormalMapName != "")
+        {
+            std::string normalName = mModelMaterials[i].NormalMapName;
+            std::wstring normalFilename = AnsiToWString(normalName);
+            normalName = normalName.substr(0, normalName.find_last_of("."));
+            mModelTextureNames.push_back(normalName);
+            texNames.push_back(normalName);
+            texFilenames.push_back(normalFilename);
+        }
     }
 
     for (int i = 0; i < (int)texNames.size(); ++i)
@@ -855,7 +860,7 @@ void Graphics::BuildDescriptorHeaps()
     // Create the SRV heap.
     //
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = mTextures.size() * 2;
+    srvHeapDesc.NumDescriptors = mTextures.size() + 3;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -1567,9 +1572,6 @@ void Graphics::BuildPSOs()
     };
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&InstanceOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["instance"])));
 
-    
-
-
     //
     // PSO for sky.
     //
@@ -1594,116 +1596,6 @@ void Graphics::BuildPSOs()
         mShaders["skyPS"]->GetBufferSize()
     };
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&mPSOs["sky"])));
-
-    // PSO for transparent objects
-
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC transparentPsoDesc = opaquePsoDesc;
-    //
-    //D3D12_RENDER_TARGET_BLEND_DESC rtBlendDesc;
-    //rtBlendDesc.BlendEnable = true;
-    //rtBlendDesc.LogicOpEnable = false;
-    //rtBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    //rtBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-    //rtBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-    //rtBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-    //rtBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-    //rtBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    //rtBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-    //rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-    //transparentPsoDesc.BlendState.RenderTarget[0] = rtBlendDesc;
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&transparentPsoDesc, IID_PPV_ARGS(&mPSOs["transparent"])));
-
-    //// PSO for alpha test
-
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC alphaTestedPsoDesc = opaquePsoDesc;
-    //alphaTestedPsoDesc.PS =
-    //{
-    //	reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()),
-    //	mShaders["alphaTestedPS"]->GetBufferSize()
-    //};
-    //alphaTestedPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
-    //
-
-    //// PSO for marking stencil mirrors
-
-    //CD3DX12_BLEND_DESC mirrorBlendState(D3D12_DEFAULT);
-    //mirrorBlendState.RenderTarget[0].RenderTargetWriteMask = 0;
-
-    //D3D12_DEPTH_STENCIL_DESC mirrorDSS;
-    //mirrorDSS.DepthEnable = true;
-    //mirrorDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    //mirrorDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-    //mirrorDSS.StencilEnable = true;
-    //mirrorDSS.StencilReadMask = 0xff;
-    //mirrorDSS.StencilWriteMask = 0xff;
-
-    //mirrorDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //mirrorDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //mirrorDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
-    //mirrorDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-
-    //mirrorDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //mirrorDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //mirrorDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
-    //mirrorDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC markMirrorsPosDesc = opaquePsoDesc;
-    //markMirrorsPosDesc.BlendState = mirrorBlendState;
-    //markMirrorsPosDesc.DepthStencilState = mirrorDSS;
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&markMirrorsPosDesc, IID_PPV_ARGS(&mPSOs["markStencilMirrors"])));
-
-    //// PSO for stencil reflections
-
-    //D3D12_DEPTH_STENCIL_DESC reflectionsDDS;
-    //reflectionsDDS.DepthEnable = true;
-    //reflectionsDDS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    //reflectionsDDS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-    //reflectionsDDS.StencilEnable = true;
-    //reflectionsDDS.StencilReadMask = 0xff;
-    //reflectionsDDS.StencilWriteMask = 0xff;
-
-    //reflectionsDDS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-    //reflectionsDDS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-    //reflectionsDDS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC drawReflectionsPsoDesc = alphaTestedPsoDesc;
-    //drawReflectionsPsoDesc.DepthStencilState = reflectionsDDS;
-    //drawReflectionsPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-    //drawReflectionsPsoDesc.RasterizerState.FrontCounterClockwise = true;
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&drawReflectionsPsoDesc, IID_PPV_ARGS(&mPSOs["drawReflections"])));
-
-    // PSO for tree sprites
-    //D3D12_GRAPHICS_PIPELINE_STATE_DESC treeSpritePsoDesc = opaquePsoDesc;
-    //treeSpritePsoDesc.VS =
-    //{
-    //	reinterpret_cast<BYTE*>(mShaders["treeSpriteVS"]->GetBufferPointer()),
-    //	mShaders["treeSpriteVS"]->GetBufferSize()
-    //};
-    //treeSpritePsoDesc.GS =
-    //{
-    //	reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()),
-    //	mShaders["treeSpriteGS"]->GetBufferSize()
-    //};
-    //treeSpritePsoDesc.PS =
-    //{
-    //	reinterpret_cast<BYTE*>(mShaders["treeSpritePS"]->GetBufferPointer()),
-    //	mShaders["treeSpritePS"]->GetBufferSize()
-    //};
-    //treeSpritePsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-    //treeSpritePsoDesc.InputLayout = { mTreeSpriteInputLayout.data(), (UINT)mTreeSpriteInputLayout.size() };
-    //treeSpritePsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
-    //ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&treeSpritePsoDesc, IID_PPV_ARGS(&mPSOs["treeSprites"])));
-
-    
 }
 
 void Graphics::BuildFrameResources()
@@ -1780,6 +1672,7 @@ void Graphics::BuildMaterials()
 void Graphics::BuildRenderItems()
 {
     UINT objCBIndex = 0;
+
     auto skyRitem = std::make_unique<RenderItem>();
     XMStoreFloat4x4(&skyRitem->World, XMMatrixScaling(5000.0f, 5000.0f, 5000.0f));
     skyRitem->TexTransform = MathHelper::Identity4x4();
@@ -1923,7 +1816,7 @@ void Graphics::BuildRenderItems()
         model->World = MathHelper::Identity4x4();
 
         XMStoreFloat4x4(&model->World,
-            XMMatrixRotationX(-XM_PIDIV2) *
+            //XMMatrixRotationX(-XM_PIDIV2) *
             XMMatrixScaling(0.01, 0.01, 0.01) *
             XMMatrixTranslation(0, 0, -10));
         model->ObjCBIndex = objCBIndex++;
@@ -2171,7 +2064,7 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
         aiProcess_CalcTangentSpace |
         aiProcess_Triangulate |
         aiProcess_SortByPType |
-        aiProcess_PreTransformVertices |
+        //aiProcess_PreTransformVertices |
         aiProcess_GenNormals |
         aiProcess_GenUVCoords |
         aiProcess_OptimizeMeshes |
@@ -2182,17 +2075,29 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
     const aiScene* scene = importer.ReadFile(WstringToString(filename), ImportFlags);
 
-    LoadMaterialTextures(scene);
+    std::vector<XMFLOAT4X4> boneOffsets;
+    std::vector<int> boneIndexToParentIndex;
+    std::unordered_map<std::string, AnimationClip> animations;
+    UINT numAnimationClips = 0;
+    if (scene->mNumMaterials > 0)
+    {
+        LoadMaterialTextures(scene);
+    }
+
+    if (scene->HasAnimations())
+    {
+        numAnimationClips = scene->mAnimations[0]->mTicksPerSecond;
+    }
 
     if (scene && scene->HasMeshes())
     {
-        int maxMeshNum = scene->mNumMeshes;
+        UINT maxMeshNum = scene->mNumMeshes;
 
         if (scene->mNumMeshes > 0)
         {
             for (UINT meshNum = 0; meshNum < maxMeshNum; ++meshNum)
             {
-                std::vector<Vertex> vertices;
+                std::vector<SkinnedVertex> vertices;
                 std::vector<UINT16> indices;
 
                 auto mesh = scene->mMeshes[meshNum];
@@ -2204,9 +2109,10 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
                 for (UINT i = 0; i < vertices.capacity(); ++i)
                 {
-                    Vertex vertex;
+                    SkinnedVertex vertex;
                     vertex.Pos = XMFLOAT3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
                     vertex.Normal = XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+
                     if (mesh->HasTangentsAndBitangents())
                     {
                         vertex.TangentU = XMFLOAT3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
@@ -2215,6 +2121,14 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     if (mesh->HasTextureCoords(0))
                     {
                         vertex.TexC = XMFLOAT2(mesh->mTextureCoords[0][i].x, -(mesh->mTextureCoords[0][i].y));
+                    }
+                    if (mesh->HasBones())
+                    {
+                        ReadBoneOffsets(mesh, boneOffsets);
+                        ReadBoneHierarchy(mesh, boneIndexToParentIndex);
+                        ReadAnimationClips(mesh, numAnimationClips, animations);
+
+                        aiBone bone = ->
                     }
 
                     vertices.push_back(vertex);
@@ -2231,7 +2145,7 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     }
 
                 }
-
+                    
                 auto geo = std::make_unique<MeshGeometry>();
                 geo->Name = modelName + std::to_string(meshNum);
 
@@ -2239,11 +2153,11 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                 submesh.IndexCount = (UINT)indices.size();
                 submesh.StartIndexLocation = 0;
                 submesh.BaseVertexLocation = 0;
-                //submesh.Bounds = BoundingBox();
+                submesh.Bounds = BoundingBox();
 
                 geo->DrawArgs["submesh"] = submesh;
 
-                const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+                const UINT vbByteSize = (UINT)vertices.size() * sizeof(SkinnedVertex);
                 const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
                 ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
@@ -2258,7 +2172,7 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                 geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
                     mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
 
-                geo->VertexByteStride = sizeof(Vertex);
+                geo->VertexByteStride = sizeof(SkinnedVertex);
                 geo->VertexBufferByteSize = vbByteSize;
                 geo->IndexFormat = DXGI_FORMAT_R16_UINT;
                 geo->IndexBufferByteSize = ibByteSize;
@@ -2267,8 +2181,6 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                 mGeometries[geo->Name] = std::move(geo);
 
             }
-
-
         }
     }
 }
@@ -2397,6 +2309,7 @@ void Graphics::processMesh(aiMesh* mesh, const aiScene* scene,
         for (UINT j = 0; j < face.mNumIndices; j++)
             indices.push_back(face.mIndices[j]);
     }
+
 }
 
 
@@ -2413,21 +2326,19 @@ void Graphics::LoadMaterialTextures(const aiScene* scene)
         aiString matName = mat->GetName();
         modelMat.Name = matName.C_Str();
 
-        UINT maxNumDiffuse = mat->GetTextureCount(aiTextureType_DIFFUSE);
-
         aiString diffuseTextPath;
         hasTex = mat->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseTextPath);
         if (hasTex == aiReturn_SUCCESS)
         {
            std::string texName = diffuseTextPath.C_Str();
-           UINT textPos = texName.find_last_of("\\");
+           UINT textPos = texName.find_last_of("/\\");
            std::string _texFilename;
 
            for (UINT i = textPos + 1; i < texName.size(); i++)
            {
                _texFilename.push_back(texName[i]);
            }
-           _texFilename = "../tex/" + _texFilename;
+           _texFilename = "../Textures/" + _texFilename;
            modelMat.DiffuseMapName = _texFilename;
         }
        
@@ -2437,17 +2348,52 @@ void Graphics::LoadMaterialTextures(const aiScene* scene)
        if (hasTex == aiReturn_SUCCESS)
        {
            std::string texName = normalTextPath.C_Str();
-           UINT textPos = texName.find_last_of("\\");
+           UINT textPos = texName.find_last_of("/\\");
            std::string _texFilename;
 
            for (UINT i = textPos + 1; i < texName.size(); i++)
            {
                _texFilename.push_back(texName[i]);
            }
-           _texFilename = "../tex/" + _texFilename;
+           _texFilename = "../Textures/" + _texFilename;
            modelMat.NormalMapName = _texFilename;
        }
         
        mModelMaterials.push_back(modelMat);
     }
+}
+
+void Graphics::ReadBoneOffsets(const aiMesh* mesh, std::vector<XMFLOAT4X4>& boneOffsets)
+{
+    for (size_t i = 0; i < mesh->mNumBones; i++)
+    {
+        aiBone* bone = mesh->mBones[i];
+        boneOffsets[i](0, 0) = bone->mOffsetMatrix.a1;
+        boneOffsets[i](0, 1) = bone->mOffsetMatrix.a2;
+        boneOffsets[i](0, 2) = bone->mOffsetMatrix.a3;
+        boneOffsets[i](0, 3) = bone->mOffsetMatrix.a4;
+        boneOffsets[i](1, 0) = bone->mOffsetMatrix.b1;
+        boneOffsets[i](1, 1) = bone->mOffsetMatrix.b2;
+        boneOffsets[i](1, 2) = bone->mOffsetMatrix.b3;
+        boneOffsets[i](1, 3) = bone->mOffsetMatrix.b4;
+        boneOffsets[i](2, 0) = bone->mOffsetMatrix.c1;
+        boneOffsets[i](2, 1) = bone->mOffsetMatrix.c2;
+        boneOffsets[i](2, 2) = bone->mOffsetMatrix.c3;
+        boneOffsets[i](2, 3) = bone->mOffsetMatrix.c4;
+        boneOffsets[i](3, 0) = bone->mOffsetMatrix.d1;
+        boneOffsets[i](3, 1) = bone->mOffsetMatrix.d2;
+        boneOffsets[i](3, 2) = bone->mOffsetMatrix.d3;
+        boneOffsets[i](3, 3) = bone->mOffsetMatrix.d4;
+    }
+    
+}
+void Graphics::ReadBoneHierarchy(const aiMesh* mesh, std::vector<int>& boneIndexToParentIndex)
+{
+
+
+}
+void Graphics::ReadAnimationClips(const aiMesh* mesh, UINT numAnimationClips,
+    std::unordered_map<std::string, AnimationClip>& animations)
+{
+
 }
