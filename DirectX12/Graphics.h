@@ -170,6 +170,8 @@ private:
 	void UpdateShadowTransform(const GameTimer& gt);
 	void UpdateShadowPassCB(const GameTimer& gt);
 
+	void UpdateSkinnedCBs(const GameTimer& gt);
+
 	void LoadModelData(const std::wstring filename, const std::string modelName);
 	bool LoadModel(const std::wstring filename);
 
@@ -177,7 +179,8 @@ private:
 	void processMesh(aiMesh* mesh, const aiScene* scene, std::vector<Vertex>& vertices, std::vector<std::uint16_t>& indices);
 	void LoadMaterialTextures(const aiScene* scene);
 
-	void LoadBoneOffsets(const aiMatrix4x4 aiMatrix, UINT num);
+
+	void AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix);
 
 	void LoadContents();
 	void LoadTextures(const std::wstring filename, const std::string texName);
@@ -294,8 +297,13 @@ private:
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
 	SkinnedData mSkinnedInfo;
 
-	std::unordered_map<int, std::vector<XMFLOAT4X4>> mBoneOffsets;
 
 	std::vector<UINT> mVertexId;
 	std::vector<float> mWeight;
+
+	DirectX::XMFLOAT4X4 mGlobalTransform = {
+										1, 0, 0, 0,
+										0, 1, 0, 0,
+										0, 0, 1, 0,
+										0, 0, 0, 1 };
 };

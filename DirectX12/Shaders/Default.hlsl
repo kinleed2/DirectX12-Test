@@ -24,6 +24,10 @@ struct VertexIn
 	float3 NormalL : NORMAL;
 	float2 TexC    : TEXCOORD;
 	float3 TangentU : TANGENT;
+#ifdef SKINNED
+	float3 BoneWeights : WEIGHTS;
+	uint4 BoneIndices  : BONEINDICES;
+#endif
 };
 
 struct VertexOut

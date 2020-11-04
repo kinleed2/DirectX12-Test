@@ -581,11 +581,32 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
     currPassCB->CopyData(1, mShadowPassCB);
 }
 
+void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
+{
+    auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+
+    // We only have one skinned model being animated.
+    mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
+
+    SkinnedConstants skinnedConstants;
+    std::copy(
+        std::begin(mSkinnedModelInst->FinalTransforms),
+        std::end(mSkinnedModelInst->FinalTransforms),
+        &skinnedConstants.BoneTransforms[0]);
+
+    currSkinnedCB->CopyData(0, skinnedConstants);
+}
 
 void Graphics::LoadContents()
 {
 
     LoadModelData(L"../Models/jx32.fbx", "model1");
+
+    mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
+    mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
+    mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
+    mSkinnedModelInst->ClipName = "Take1";
+    mSkinnedModelInst->TimePos = 0.0f;
 
     std::vector<std::string> texNames =
     {
@@ -1603,7 +1624,7 @@ void Graphics::BuildFrameResources()
     for (int i = 0; i < gNumFrameResources; ++i)
     {
         mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-            2, (UINT)mAllRitems.size(), mInstanceCount, (UINT)mMaterials.size()));
+            2, (UINT)mAllRitems.size(), mInstanceCount, (UINT)mMaterials.size(), 1));
     }
 }
 
@@ -1894,8 +1915,12 @@ void Graphics::BuildInstanceRenderItems()
 void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
     UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
- 
+    UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
+
+
     auto objectCB = mCurrFrameResource->ObjectCB->Resource();
+    auto skinnedCB = mCurrFrameResource->SkinnedCB->Resource();
+
 
     // For each render item...
     for(size_t i = 0; i < ritems.size(); ++i)
@@ -1910,9 +1935,21 @@ void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
 
         cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
 
+        if (ri->SkinnedModelInst != nullptr)
+        {
+            D3D12_GPU_VIRTUAL_ADDRESS skinnedCBAddress = skinnedCB->GetGPUVirtualAddress() + ri->SkinnedCBIndex * skinnedCBByteSize;
+            cmdList->SetGraphicsRootConstantBufferView(1, skinnedCBAddress);
+        }
+        else
+        {
+            cmdList->SetGraphicsRootConstantBufferView(1, 0);
+        }
+
         cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
     }
+
 }
+
 void Graphics::DrawInstanceRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
     for (size_t i = 0; i < ritems.size(); ++i)
@@ -2073,20 +2110,25 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
     Assimp::Importer importer;
 
-    const aiScene* scene = importer.ReadFile(WstringToString(filename), ImportFlags);
+    const aiScene* scene = importer.ReadFile(WstringToString(filename), NULL);
+
+    std::unordered_map<std::string, int> boneName;
+    UINT boneNum = 0;
+
+    std::vector<BoneAnimation>  mBoneAnimation;
+    std::unordered_map<std::string, AnimationClip> animations;
 
     std::vector<XMFLOAT4X4> boneOffsets;
+
     std::vector<int> boneIndexToParentIndex;
-    std::unordered_map<std::string, AnimationClip> animations;
+
     UINT numAnimationClips = 0;
+
+    AiMatrixToXMFLOAT4X4(scene->mRootNode->mTransformation, &mGlobalTransform);
+
     if (scene->mNumMaterials > 0)
     {
         LoadMaterialTextures(scene);
-    }
-
-    if (scene->HasAnimations())
-    {
-        numAnimationClips = scene->mAnimations[0]->mTicksPerSecond;
     }
 
     if (scene && scene->HasMeshes())
@@ -2101,7 +2143,7 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                 std::vector<UINT16> indices;
 
                 auto mesh = scene->mMeshes[meshNum];
-                
+
                 assert(mesh->HasPositions());
                 assert(mesh->HasNormals());
 
@@ -2113,7 +2155,7 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     vertex.Pos = XMFLOAT3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
                     vertex.Normal = XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
 
-                    if (mesh->HasTangentsAndBitangents())
+                    if(mesh->HasTangentsAndBitangents())
                     {
                         vertex.TangentU = XMFLOAT3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
                         //	vertex.Bitangent = XMFLOAT3(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
@@ -2133,14 +2175,30 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     {
                         aiBone* bone = mesh->mBones[j];
 
-                        LoadBoneOffsets(bone->mOffsetMatrix, meshNum);
-
-                        for (size_t k = 0; k < bone->mNumWeights; k++)
+                        if (boneName.find(bone->mName.C_Str()) == boneName.end())
                         {
-                            aiVertexWeight vertexWeight = bone->mWeights[k];
+                            XMFLOAT4X4 boneOffset;
 
-                            vertices[vertexWeight.mVertexId].BoneWeights = vertexWeight.mWeight;
-                            vertices[vertexWeight.mVertexId].BoneIndices.push_back(j);
+                            AiMatrixToXMFLOAT4X4(bone->mOffsetMatrix, &boneOffset);
+
+                            boneOffsets.push_back(boneOffset);
+
+                            boneName[bone->mName.C_Str()] = boneOffsets.size() - 1;
+
+
+                            for (size_t k = 0; k < bone->mNumWeights; k++)
+                            {
+                                aiVertexWeight vertexWeight = bone->mWeights[k];
+
+                                vertices[vertexWeight.mVertexId].BoneWeights = vertexWeight.mWeight;
+
+                                vertices[vertexWeight.mVertexId].BoneIndices.push_back(j);
+
+                                if (vertices[vertexWeight.mVertexId].BoneIndices.size() > 4)
+                                {
+                                    std::cout << "2";
+                                }
+                            }
                         }
 
 
@@ -2197,6 +2255,71 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
             }
         }
     }
+
+    if (scene->HasAnimations())
+    {
+        numAnimationClips = scene->mNumAnimations;
+
+        for (size_t i = 0; i < scene->mNumAnimations; i++)
+        {
+            aiAnimation* animation = scene->mAnimations[i];
+
+            
+
+            for (size_t j = 0; j < animation->mNumChannels; j++)
+            {
+                aiNodeAnim* nodeAnim = animation->mChannels[j];
+
+                aiNode* node = scene->mRootNode->FindNode(nodeAnim->mNodeName);
+
+                aiNode* parentNode = node->mParent;
+                
+                boneIndexToParentIndex.push_back(boneName[parentNode->mName.C_Str()]);
+
+                if (!(nodeAnim->mNumPositionKeys == nodeAnim->mNumRotationKeys &&
+                    nodeAnim->mNumPositionKeys == nodeAnim->mNumScalingKeys))
+                {
+                    std::cout << "keyFrame error or not!!!!!!!!!!!!!!!!!!!!!";
+                }
+
+                BoneAnimation boneAnimation;
+
+                for (size_t k = 0; k < nodeAnim->mNumPositionKeys; k++)
+                {
+                    Keyframe keyframe;
+
+                    keyframe.TimePos = nodeAnim->mPositionKeys[k].mTime;
+
+                    keyframe.Translation = XMFLOAT3(
+                        nodeAnim->mPositionKeys[k].mValue.x,
+                        nodeAnim->mPositionKeys[k].mValue.y,
+                        nodeAnim->mPositionKeys[k].mValue.z);
+
+                    keyframe.RotationQuat = XMFLOAT4(
+                        nodeAnim->mRotationKeys[k].mValue.x,
+                        nodeAnim->mRotationKeys[k].mValue.y,
+                        nodeAnim->mRotationKeys[k].mValue.z,
+                        nodeAnim->mRotationKeys[k].mValue.w);
+
+                    keyframe.Scale = XMFLOAT3(
+                        nodeAnim->mNumScalingKeys,
+                        nodeAnim->mNumScalingKeys,
+                        nodeAnim->mNumScalingKeys);
+
+                    boneAnimation.Keyframes.push_back(keyframe);
+
+                }
+
+                mBoneAnimation.push_back(boneAnimation);
+            }
+
+            animations[animation->mName.C_Str()].BoneAnimations = mBoneAnimation;
+        }
+
+
+    }
+
+    mSkinnedInfo.Set(boneIndexToParentIndex, boneOffsets, animations);
 }
 
 bool Graphics::LoadModel(const std::wstring filename)
@@ -2377,25 +2500,22 @@ void Graphics::LoadMaterialTextures(const aiScene* scene)
     }
 }
 
-void Graphics::LoadBoneOffsets(const aiMatrix4x4 aiMatrix, UINT num)
+void Graphics::AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix)
 {
-    XMFLOAT4X4 boneOffset;
-    boneOffset.m[0][0] = aiMatrix.a1;
-    boneOffset.m[0][1] = aiMatrix.a2;
-    boneOffset.m[0][2] = aiMatrix.a3;
-    boneOffset.m[0][3] = aiMatrix.a4;
-    boneOffset.m[1][0] = aiMatrix.b1;
-    boneOffset.m[1][1] = aiMatrix.b2;
-    boneOffset.m[1][2] = aiMatrix.b3;
-    boneOffset.m[1][3] = aiMatrix.b4;
-    boneOffset.m[2][0] = aiMatrix.c1;
-    boneOffset.m[2][1] = aiMatrix.c2;
-    boneOffset.m[2][2] = aiMatrix.c3;
-    boneOffset.m[2][3] = aiMatrix.c4;
-    boneOffset.m[3][0] = aiMatrix.d1;
-    boneOffset.m[3][1] = aiMatrix.d2;
-    boneOffset.m[3][2] = aiMatrix.d3;
-    boneOffset.m[3][3] = aiMatrix.d4;
-
-    mBoneOffsets[num].push_back(boneOffset);
+    matrix->m[0][0] = aiMatrix.a1;
+    matrix->m[0][1] = aiMatrix.a2;
+    matrix->m[0][2] = aiMatrix.a3;
+    matrix->m[0][3] = aiMatrix.a4;
+    matrix->m[1][0] = aiMatrix.b1;
+    matrix->m[1][1] = aiMatrix.b2;
+    matrix->m[1][2] = aiMatrix.b3;
+    matrix->m[1][3] = aiMatrix.b4;
+    matrix->m[2][0] = aiMatrix.c1;
+    matrix->m[2][1] = aiMatrix.c2;
+    matrix->m[2][2] = aiMatrix.c3;
+    matrix->m[2][3] = aiMatrix.c4;
+    matrix->m[3][0] = aiMatrix.d1;
+    matrix->m[3][1] = aiMatrix.d2;
+    matrix->m[3][2] = aiMatrix.d3;
+    matrix->m[3][3] = aiMatrix.d4;
 }
