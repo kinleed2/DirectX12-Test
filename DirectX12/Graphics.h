@@ -49,7 +49,7 @@ struct SkinnedVertex
 	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 TexC;
 	DirectX::XMFLOAT3 TangentU;
-	float BoneWeights;
+	std::vector<FLOAT> BoneWeights;
 	std::vector<UINT> BoneIndices;
 };
 

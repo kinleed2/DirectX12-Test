@@ -120,6 +120,7 @@ void Graphics::Update(const GameTimer& gt)
     //AnimateMaterials(gt);
     UpdateInstanceData(gt);
     UpdateObjectCBs(gt);
+    UpdateSkinnedCBs(gt);
     UpdateMaterialBuffer(gt);
     UpdateShadowTransform(gt);
     UpdateMainPassCB(gt);
@@ -188,6 +189,10 @@ void Graphics::Draw(const GameTimer& gt)
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+
+
+    mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
 
     mCommandList->SetPipelineState(mPSOs["debug"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
@@ -834,25 +839,29 @@ void Graphics::BuildRootSignature()
     texTable[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, mTextures.size(), 2, 0);
 
     // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[6];
+    CD3DX12_ROOT_PARAMETER slotRootParameter[7];
 
     // instance 
     slotRootParameter[0].InitAsShaderResourceView(0, 1);
     // constant buffer
     slotRootParameter[1].InitAsConstantBufferView(0);
-    // pass buffer
+    // constant buffer
     slotRootParameter[2].InitAsConstantBufferView(1);
+    // pass buffer
+    slotRootParameter[3].InitAsConstantBufferView(2);
     // material
-    slotRootParameter[3].InitAsShaderResourceView(1, 1);
+    slotRootParameter[4].InitAsShaderResourceView(1, 1);
     // texture
-    slotRootParameter[4].InitAsDescriptorTable(1, &texTable[0], D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[5].InitAsDescriptorTable(1, &texTable[0], D3D12_SHADER_VISIBILITY_PIXEL);
     // sky box
-    slotRootParameter[5].InitAsDescriptorTable(1, &texTable[1], D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[6].InitAsDescriptorTable(1, &texTable[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
     auto staticSamplers = GetStaticSamplers();
 
+    auto size = sizeof(slotRootParameter);
+
     // A root signature is an array of root parameters.
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(6, slotRootParameter,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(7, slotRootParameter,
         (UINT)staticSamplers.size(), staticSamplers.data(),
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -979,10 +988,20 @@ void Graphics::BuildShadersAndInputLayout()
         "ALPHA_TEST", "1",
         NULL, NULL
     };
+
+
+    const D3D_SHADER_MACRO skinnedDefines[] =
+    {
+        "SKINNED", "1",
+        NULL, NULL
+    };
+
     
     mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_1");
+    mShaders["skinnedVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", skinnedDefines, "VS", "vs_5_1");
+
     mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_1");
-    //mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_1");
+    mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_1");
 
     //mShaders["treeSpriteVS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "VS", "vs_5_1");
     //mShaders["treeSpriteGS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "GS", "gs_5_1");
@@ -995,6 +1014,8 @@ void Graphics::BuildShadersAndInputLayout()
     mShaders["skyPS"] = d3dUtil::CompileShader(L"Shaders\\Sky.hlsl", nullptr, "PS", "ps_5_1");
 
     mShaders["shadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "VS", "vs_5_1");
+    mShaders["skinnedShadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", skinnedDefines, "VS", "vs_5_1");
+
     mShaders["shadowOpaquePS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "PS", "ps_5_1");
     mShaders["shadowAlphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", alphaTestDefines, "PS", "ps_5_1");
 
@@ -1539,6 +1560,23 @@ void Graphics::BuildPSOs()
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
     //
+    // PSO for skinned pass.
+    //
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
+    skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+    skinnedOpaquePsoDesc.VS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+        mShaders["skinnedVS"]->GetBufferSize()
+    };
+    skinnedOpaquePsoDesc.PS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
+        mShaders["opaquePS"]->GetBufferSize()
+    };
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
+
+    //
     // PSO for shadow map pass.
     //
     D3D12_GRAPHICS_PIPELINE_STATE_DESC smapPsoDesc = opaquePsoDesc;
@@ -1561,6 +1599,20 @@ void Graphics::BuildPSOs()
     smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
     smapPsoDesc.NumRenderTargets = 0;   
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&mPSOs["shadow_opaque"])));
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedSmapPsoDesc = smapPsoDesc;
+    skinnedSmapPsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+    skinnedSmapPsoDesc.VS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["skinnedShadowVS"]->GetBufferPointer()),
+        mShaders["skinnedShadowVS"]->GetBufferSize()
+    };
+    skinnedSmapPsoDesc.PS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["shadowOpaquePS"]->GetBufferPointer()),
+        mShaders["shadowOpaquePS"]->GetBufferSize()
+    };
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedSmapPsoDesc, IID_PPV_ARGS(&mPSOs["skinnedShadow_opaque"])));
 
     //
     // PSO for debug layer.
@@ -1837,7 +1889,7 @@ void Graphics::BuildRenderItems()
         model->World = MathHelper::Identity4x4();
 
         XMStoreFloat4x4(&model->World,
-            //XMMatrixRotationX(-XM_PIDIV2) *
+            XMMatrixRotationX(-XM_PIDIV2) *
             XMMatrixScaling(0.01, 0.01, 0.01) *
             XMMatrixTranslation(0, 0, -10));
         model->ObjCBIndex = objCBIndex++;
@@ -1849,7 +1901,7 @@ void Graphics::BuildRenderItems()
         model->StartIndexLocation = model->Geo->DrawArgs["submesh"].StartIndexLocation;
         model->BaseVertexLocation = model->Geo->DrawArgs["submesh"].BaseVertexLocation;
 
-        mRitemLayer[(int)RenderLayer::Opaque].push_back(model.get());
+        mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(model.get());
         mAllRitems.push_back(std::move(model));
 
     }
@@ -2188,20 +2240,13 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
                             for (size_t k = 0; k < bone->mNumWeights; k++)
                             {
-                                aiVertexWeight vertexWeight = bone->mWeights[k];
-
-                                vertices[vertexWeight.mVertexId].BoneWeights = vertexWeight.mWeight;
-
+                                aiVertexWeight vertexWeight = bone->mWeights[k];                                    
+                                
+                                vertices[vertexWeight.mVertexId].BoneWeights.push_back(vertexWeight.mWeight);
                                 vertices[vertexWeight.mVertexId].BoneIndices.push_back(j);
 
-                                if (vertices[vertexWeight.mVertexId].BoneIndices.size() > 4)
-                                {
-                                    std::cout << "2";
-                                }
                             }
                         }
-
-
                     }
 
                 }
