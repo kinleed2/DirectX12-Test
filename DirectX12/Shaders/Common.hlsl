@@ -84,7 +84,7 @@ cbuffer cbPerObject : register(b0)
 
 cbuffer cbSkinned : register(b1)
 {
-    float4x4 gBoneTransforms[96];
+    float4x4 gBoneTransforms[128];
 };
 
 

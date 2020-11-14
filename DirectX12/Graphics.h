@@ -7,24 +7,28 @@
 #include "Waves.h"
 #include "FrameResource.h"
 #include "SkinnedData.h"
-#include "ModelLoader.h"
 #include "ShadowMap.h"
 
 #include "DirectXTex.h"
 
 //DirectXTK 12
-#include "DDSTextureLoader.h"
-#include "WICTextureLoader.h"
+#include <DDSTextureLoader.h>
+#include <WICTextureLoader.h>
+#include <DirectXMath.h>
+#include <SimpleMath.h>
 
 //Assimp
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/Importer.hpp>
 
+//FBX SDK
+#include <fbxsdk.h>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
+using namespace DirectX::SimpleMath;
 
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "D3D12.lib")
@@ -43,15 +47,24 @@ struct ModelMaterial
 	std::string NormalMapName;
 };
 
+#define MAX_BONE_INFLUENCES 4
+
 struct SkinnedVertex
 {
 	DirectX::XMFLOAT3 Pos;
 	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 TexC;
 	DirectX::XMFLOAT3 TangentU;
-	std::vector<FLOAT> BoneWeights;
-	std::vector<UINT> BoneIndices;
+	FLOAT BoneWeights[MAX_BONE_INFLUENCES] = { 1, 0, 0, 0 };
+	INT BoneIndices[MAX_BONE_INFLUENCES] = {};
 };
+
+struct BoneInfluence
+{
+	int Index = 0;
+	float Weight = 0;
+};
+//typedef std::vector<BoneInfluence> bone_influences_per_control_point;
 
 struct SkinnedModelInstance
 {
@@ -82,6 +95,7 @@ struct SkinnedModelInstance
 struct RenderItem
 {
 	RenderItem() = default;
+	RenderItem(const RenderItem& rhs) = delete;
 
 	// World matrix of the shape that describes the object's local space
 	// relative to the world space, which defines the position, orientation,
@@ -301,9 +315,4 @@ private:
 	std::vector<UINT> mVertexId;
 	std::vector<float> mWeight;
 
-	DirectX::XMFLOAT4X4 mGlobalTransform = {
-										1, 0, 0, 0,
-										0, 1, 0, 0,
-										0, 0, 1, 0,
-										0, 0, 0, 1 };
 };

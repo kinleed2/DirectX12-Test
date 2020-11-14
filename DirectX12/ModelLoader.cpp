@@ -75,7 +75,7 @@ bool M3DLoader::LoadM3d(const std::string& filename,
 		ReadBoneHierarchy(fin, numBones, boneIndexToParentIndex);
 		ReadAnimationClips(fin, numBones, numAnimationClips, animations);
 
-		skinInfo.Set(boneIndexToParentIndex, boneOffsets, animations);
+		//skinInfo.Set(boneIndexToParentIndex, boneOffsets, animations);
 
 		return true;
 	}

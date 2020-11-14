@@ -120,7 +120,7 @@ void Graphics::Update(const GameTimer& gt)
     //AnimateMaterials(gt);
     UpdateInstanceData(gt);
     UpdateObjectCBs(gt);
-    UpdateSkinnedCBs(gt);
+    //UpdateSkinnedCBs(gt);
     UpdateMaterialBuffer(gt);
     UpdateShadowTransform(gt);
     UpdateMainPassCB(gt);
@@ -150,15 +150,15 @@ void Graphics::Draw(const GameTimer& gt)
     // Bind all the materials used in this scene.  For structured buffers, we can bypass the heap and 
     // set as a root descriptor.
     auto matBuffer = mCurrFrameResource->MaterialBuffer->Resource();
-    mCommandList->SetGraphicsRootShaderResourceView(3, matBuffer->GetGPUVirtualAddress());
+    mCommandList->SetGraphicsRootShaderResourceView(4, matBuffer->GetGPUVirtualAddress());
 
     // Bind null SRV for shadow map pass.
-    mCommandList->SetGraphicsRootDescriptorTable(4, mNullSrv);
+    mCommandList->SetGraphicsRootDescriptorTable(5, mNullSrv);
 
     // Bind all the textures used in this scene.  Observe
     // that we only have to specify the first descriptor in the table.  
     // The root signature knows how many descriptors are expected in the table.
-    mCommandList->SetGraphicsRootDescriptorTable(5, mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    mCommandList->SetGraphicsRootDescriptorTable(6, mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
     DrawSceneToShadowMap();
 
@@ -177,7 +177,7 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
     auto passCB = mCurrFrameResource->PassCB->Resource();
-    mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
+    mCommandList->SetGraphicsRootConstantBufferView(3, passCB->GetGPUVirtualAddress());
 
     // Bind the sky cube map.  For our demos, we just use one "world" cube map representing the environment
     // from far away, so all objects will use the same cube map and we only need to set it once per-frame.  
@@ -185,7 +185,7 @@ void Graphics::Draw(const GameTimer& gt)
     // index into an array of cube maps.
     CD3DX12_GPU_DESCRIPTOR_HANDLE skyTexDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvUavDescriptorSize);
-    mCommandList->SetGraphicsRootDescriptorTable(4, skyTexDescriptor);
+    mCommandList->SetGraphicsRootDescriptorTable(5, skyTexDescriptor);
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
@@ -605,13 +605,14 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 void Graphics::LoadContents()
 {
 
-    LoadModelData(L"../Models/jx32.fbx", "model1");
+    //LoadModelData(L"../Models/jx32.fbx", "model1");
 
-    mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
-    mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
-    mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
-    mSkinnedModelInst->ClipName = "Take1";
-    mSkinnedModelInst->TimePos = 0.0f;
+    //mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
+    //mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
+    //mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
+    //mSkinnedModelInst->ClipName = "mixamo.com";
+    ////mSkinnedModelInst->ClipName = "seasun animation";
+    //mSkinnedModelInst->TimePos = 0.0f;
 
     std::vector<std::string> texNames =
     {
@@ -640,26 +641,33 @@ void Graphics::LoadContents()
     {
         std::string diffuseName = mModelMaterials[i].DiffuseMapName;
 
-        std::wstring diffuseFilename = AnsiToWString(diffuseName);
-
-        // strip off extension
-        diffuseName = diffuseName.substr(0, diffuseName.find_last_of("."));
-       
-
-        mModelTextureNames.push_back(diffuseName);
-        texNames.push_back(diffuseName);
-        texFilenames.push_back(diffuseFilename);
-
-
-        if (mModelMaterials[i].NormalMapName != "")
+        if (diffuseName != "")
         {
-            std::string normalName = mModelMaterials[i].NormalMapName;
-            std::wstring normalFilename = AnsiToWString(normalName);
-            normalName = normalName.substr(0, normalName.find_last_of("."));
-            mModelTextureNames.push_back(normalName);
-            texNames.push_back(normalName);
-            texFilenames.push_back(normalFilename);
+
+
+
+            std::wstring diffuseFilename = AnsiToWString(diffuseName);
+
+            // strip off extension
+            diffuseName = diffuseName.substr(0, diffuseName.find_last_of("."));
+
+
+            mModelTextureNames.push_back(diffuseName);
+            texNames.push_back(diffuseName);
+            texFilenames.push_back(diffuseFilename);
+
+
+            if (mModelMaterials[i].NormalMapName != "")
+            {
+                std::string normalName = mModelMaterials[i].NormalMapName;
+                std::wstring normalFilename = AnsiToWString(normalName);
+                normalName = normalName.substr(0, normalName.find_last_of("."));
+                mModelTextureNames.push_back(normalName);
+                texNames.push_back(normalName);
+                texFilenames.push_back(normalFilename);
+            }
         }
+
     }
 
     for (int i = 0; i < (int)texNames.size(); ++i)
@@ -845,15 +853,15 @@ void Graphics::BuildRootSignature()
     slotRootParameter[0].InitAsShaderResourceView(0, 1);
     // constant buffer
     slotRootParameter[1].InitAsConstantBufferView(0);
-    // constant buffer
+    // skinned buffer
     slotRootParameter[2].InitAsConstantBufferView(1);
     // pass buffer
     slotRootParameter[3].InitAsConstantBufferView(2);
     // material
     slotRootParameter[4].InitAsShaderResourceView(1, 1);
-    // texture
-    slotRootParameter[5].InitAsDescriptorTable(1, &texTable[0], D3D12_SHADER_VISIBILITY_PIXEL);
     // sky box
+    slotRootParameter[5].InitAsDescriptorTable(1, &texTable[0], D3D12_SHADER_VISIBILITY_PIXEL);
+    // tex
     slotRootParameter[6].InitAsDescriptorTable(1, &texTable[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
     auto staticSamplers = GetStaticSamplers();
@@ -1040,12 +1048,12 @@ void Graphics::BuildShadersAndInputLayout()
 
     mSkinnedInputLayout =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "WEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BONEINDICES", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 }
 
@@ -1601,6 +1609,7 @@ void Graphics::BuildPSOs()
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&mPSOs["shadow_opaque"])));
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedSmapPsoDesc = smapPsoDesc;
+
     skinnedSmapPsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
     skinnedSmapPsoDesc.VS =
     {
@@ -1884,22 +1893,36 @@ void Graphics::BuildRenderItems()
 
 
     for (size_t i = 0; i < mModelMaterials.size(); i++)
+    //for (size_t i = 0; i < 2; i++)
     {
         auto model = std::make_unique<RenderItem>();
-        model->World = MathHelper::Identity4x4();
 
-        XMStoreFloat4x4(&model->World,
-            XMMatrixRotationX(-XM_PIDIV2) *
-            XMMatrixScaling(0.01, 0.01, 0.01) *
-            XMMatrixTranslation(0, 0, -10));
+        XMMATRIX modelScale = XMMatrixScaling(0.01f, 0.01f, 0.01f);
+        XMMATRIX modelRot = XMMatrixRotationZ(-XM_PIDIV2);
+        XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -10.0f);
+        XMStoreFloat4x4(&model->World, modelScale * modelRot * modelOffset);
+
         model->ObjCBIndex = objCBIndex++;
-        model->Mat = mMaterials[mModelMaterials[i].Name].get();
+        if (mModelMaterials[i].Name != "")
+        {
+            model->Mat = mMaterials[mModelMaterials[i].Name].get();
+        }
+        else
+        {
+            model->Mat = mMaterials["mirror0"].get();
+        }
+        
         model->Geo = mGeometries["model1" + std::to_string(i)].get();
         model->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
         model->IndexCount = model->Geo->DrawArgs["submesh"].IndexCount;
         model->StartIndexLocation = model->Geo->DrawArgs["submesh"].StartIndexLocation;
         model->BaseVertexLocation = model->Geo->DrawArgs["submesh"].BaseVertexLocation;
+
+        // All render items for this solider.m3d instance share
+        // the same skinned model instance.
+        model->SkinnedCBIndex = 0;
+        model->SkinnedModelInst = mSkinnedModelInst.get();
 
         mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(model.get());
         mAllRitems.push_back(std::move(model));
@@ -1990,11 +2013,11 @@ void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
         if (ri->SkinnedModelInst != nullptr)
         {
             D3D12_GPU_VIRTUAL_ADDRESS skinnedCBAddress = skinnedCB->GetGPUVirtualAddress() + ri->SkinnedCBIndex * skinnedCBByteSize;
-            cmdList->SetGraphicsRootConstantBufferView(1, skinnedCBAddress);
+            cmdList->SetGraphicsRootConstantBufferView(2, skinnedCBAddress);
         }
         else
         {
-            cmdList->SetGraphicsRootConstantBufferView(1, 0);
+            cmdList->SetGraphicsRootConstantBufferView(2, 0);
         }
 
         cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
@@ -2045,11 +2068,13 @@ void Graphics::DrawSceneToShadowMap()
     // Bind the pass constant buffer for the shadow map pass.
     auto passCB = mCurrFrameResource->PassCB->Resource();
     D3D12_GPU_VIRTUAL_ADDRESS passCBAddress = passCB->GetGPUVirtualAddress() + 1 * passCBByteSize;
-    mCommandList->SetGraphicsRootConstantBufferView(2, passCBAddress);
+    mCommandList->SetGraphicsRootConstantBufferView(3, passCBAddress);
 
     mCommandList->SetPipelineState(mPSOs["shadow_opaque"].Get());
-
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+
+    mCommandList->SetPipelineState(mPSOs["skinnedShadow_opaque"].Get());
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
 
     // Change back to GENERIC_READ so we can read the texture in a shader.
     mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
@@ -2164,25 +2189,29 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
     const aiScene* scene = importer.ReadFile(WstringToString(filename), NULL);
 
-    std::unordered_map<std::string, int> boneName;
-    UINT boneNum = 0;
+    std::unordered_map<std::string, int> boneIndex;
 
-    std::vector<BoneAnimation>  mBoneAnimation;
     std::unordered_map<std::string, AnimationClip> animations;
 
-    std::vector<XMFLOAT4X4> boneOffsets;
+    UINT numBone = 0;
 
     std::vector<int> boneIndexToParentIndex;
 
     UINT numAnimationClips = 0;
-
-    AiMatrixToXMFLOAT4X4(scene->mRootNode->mTransformation, &mGlobalTransform);
 
     if (scene->mNumMaterials > 0)
     {
         LoadMaterialTextures(scene);
     }
 
+
+    
+
+
+    Matrix setBoneOffset = XMMatrixIdentity();
+    std::vector<XMFLOAT4X4> boneOffsets;
+    boneOffsets.resize(103);
+    boneIndex.reserve(103);
     if (scene && scene->HasMeshes())
     {
         UINT maxMeshNum = scene->mNumMeshes;
@@ -2194,7 +2223,78 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                 std::vector<SkinnedVertex> vertices;
                 std::vector<UINT16> indices;
 
+                std::vector<std::vector<BoneInfluence>> boneInfluences;
+
                 auto mesh = scene->mMeshes[meshNum];
+
+                if (mesh->HasBones())
+                {
+                    boneInfluences.resize(mesh->mNumVertices);
+
+                    for (size_t j = 0; j < mesh->mNumBones; j++)
+                    {
+                        aiBone* bone = mesh->mBones[j];
+                        UINT BoneIndex = 0;
+
+                        std::cout << bone->mName.C_Str() << std::endl;
+                        if (boneIndex.find(bone->mName.C_Str()) == boneIndex.end())
+                        {
+                            BoneIndex = numBone;
+                            numBone++;                    
+                        }
+                        else 
+                        {
+                            BoneIndex = boneIndex[bone->mName.C_Str()];
+                        }
+
+                        boneIndex[bone->mName.C_Str()] = BoneIndex;
+
+                        Matrix boneOffset;
+                            
+                        std::cout << boneIndex[bone->mName.C_Str()] << std::endl;
+                        
+                        AiMatrixToXMFLOAT4X4(bone->mOffsetMatrix, &boneOffset);
+
+                        boneOffsets[BoneIndex] = boneOffset;
+                        
+                        std::cout << 
+                            bone->mOffsetMatrix.a1 << " " <<
+                            bone->mOffsetMatrix.a2 << " " <<
+                            bone->mOffsetMatrix.a3 << " " <<
+                            bone->mOffsetMatrix.a4 << "\n" <<
+                            bone->mOffsetMatrix.b1 << " " <<
+                            bone->mOffsetMatrix.b2 << " " <<
+                            bone->mOffsetMatrix.b3 << " " <<
+                            bone->mOffsetMatrix.b4 << "\n" <<
+                            bone->mOffsetMatrix.c1 << " " <<
+                            bone->mOffsetMatrix.c2 << " " <<
+                            bone->mOffsetMatrix.c3 << " " <<
+                            bone->mOffsetMatrix.c4 << "\n" <<
+                            bone->mOffsetMatrix.d1 << " " <<
+                            bone->mOffsetMatrix.d2 << " " <<
+                            bone->mOffsetMatrix.d3 << " " <<
+                            bone->mOffsetMatrix.d4 << "\n";
+                        
+                        boneOffsets.at(boneIndex[bone->mName.C_Str()]) = boneOffset;
+                        
+                        for (size_t k = 0; k < bone->mNumWeights; k++)
+                        {
+                        
+                            aiVertexWeight vertexWeight = bone->mWeights[k];
+                            std::vector<BoneInfluence>& boneInfluence = boneInfluences.at(vertexWeight.mVertexId);
+                        
+                            BoneInfluence influence;
+                        
+                            influence.Weight = vertexWeight.mWeight;
+                            influence.Index = j;
+                        
+                            boneInfluence.push_back(influence);
+                        }
+                        
+                        
+                    }
+
+                }
 
                 assert(mesh->HasPositions());
                 assert(mesh->HasNormals());
@@ -2216,39 +2316,22 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
                     {
                         vertex.TexC = XMFLOAT2(mesh->mTextureCoords[0][i].x, -(mesh->mTextureCoords[0][i].y));
                     }
-                    
-
-                    vertices.push_back(vertex);
-                }
-
-                if (mesh->HasBones())
-                {
-                    for (size_t j = 0; j < mesh->mNumBones; j++)
+                    if (mesh->HasBones())
                     {
-                        aiBone* bone = mesh->mBones[j];
+                        std::vector<BoneInfluence>& boneInfluence = boneInfluences.at(i);
 
-                        if (boneName.find(bone->mName.C_Str()) == boneName.end())
+                        for (size_t j = 0; j < boneInfluence.size(); j++)
                         {
-                            XMFLOAT4X4 boneOffset;
 
-                            AiMatrixToXMFLOAT4X4(bone->mOffsetMatrix, &boneOffset);
-
-                            boneOffsets.push_back(boneOffset);
-
-                            boneName[bone->mName.C_Str()] = boneOffsets.size() - 1;
-
-
-                            for (size_t k = 0; k < bone->mNumWeights; k++)
+                            if (j < MAX_BONE_INFLUENCES)
                             {
-                                aiVertexWeight vertexWeight = bone->mWeights[k];                                    
-                                
-                                vertices[vertexWeight.mVertexId].BoneWeights.push_back(vertexWeight.mWeight);
-                                vertices[vertexWeight.mVertexId].BoneIndices.push_back(j);
-
+                                vertex.BoneWeights[j] = boneInfluence.at(j).Weight;
+                                vertex.BoneIndices[j] = boneInfluence.at(j).Index;
                             }
                         }
                     }
 
+                    vertices.push_back(vertex);
                 }
 
                 indices.reserve(mesh->mNumFaces * 3);
@@ -2299,69 +2382,81 @@ void Graphics::LoadModelData(const std::wstring filename, const std::string mode
 
             }
         }
-    }
 
-    if (scene->HasAnimations())
-    {
-        numAnimationClips = scene->mNumAnimations;
-
-        for (size_t i = 0; i < scene->mNumAnimations; i++)
+        if (scene->HasAnimations())
         {
-            aiAnimation* animation = scene->mAnimations[i];
+            numAnimationClips = scene->mNumAnimations;
 
-            
-
-            for (size_t j = 0; j < animation->mNumChannels; j++)
+            for (size_t i = 0; i < scene->mNumAnimations; i++)
             {
-                aiNodeAnim* nodeAnim = animation->mChannels[j];
+                aiAnimation* animation = scene->mAnimations[i];
 
-                aiNode* node = scene->mRootNode->FindNode(nodeAnim->mNodeName);
+                //boneIndex.reserve(animation->mNumChannels);
 
-                aiNode* parentNode = node->mParent;
-                
-                boneIndexToParentIndex.push_back(boneName[parentNode->mName.C_Str()]);
+                std::vector<BoneAnimation> mBoneAnimation;
 
-                if (!(nodeAnim->mNumPositionKeys == nodeAnim->mNumRotationKeys &&
-                    nodeAnim->mNumPositionKeys == nodeAnim->mNumScalingKeys))
+                boneIndexToParentIndex.resize(boneIndex.size());
+
+                for (size_t j = 0; j < animation->mNumChannels; j++)
                 {
-                    std::cout << "keyFrame error or not!!!!!!!!!!!!!!!!!!!!!";
+                    aiNodeAnim* nodeAnim = animation->mChannels[j];
+
+                    aiNode* node = scene->mRootNode->FindNode(nodeAnim->mNodeName);
+
+                    //boneIndex[nodeAnim->mNodeName.C_Str()] = j;
+
+                    std::cout << node->mName.C_Str() << std::endl;
+
+                    aiNode* parentNode = node->mParent;
+
+                    //boneIndexToParentIndex[boneIndex[node->mName.C_Str()]] = (boneIndex[node->mName.C_Str()]);
+
+                    if (boneIndex.find(parentNode->mName.C_Str()) == boneIndex.end())
+                    {
+                        boneIndexToParentIndex[boneIndex[node->mName.C_Str()]] = (boneIndex[node->mName.C_Str()]);
+                    }
+                    else
+                    {
+                        boneIndexToParentIndex[boneIndex[node->mName.C_Str()]] = (boneIndex[parentNode->mName.C_Str()]);
+                    }
+
+                    BoneAnimation boneAnimation;
+
+                    for (size_t k = 0; k < nodeAnim->mNumPositionKeys; k++)
+                    {
+                        Keyframe keyframe;
+
+                        keyframe.TimePos = nodeAnim->mPositionKeys[k].mTime;
+
+                        aiVector3D pos = nodeAnim->mPositionKeys[k].mValue;
+
+                        keyframe.Translation = XMFLOAT3(
+                            nodeAnim->mPositionKeys[k].mValue.x,
+                            nodeAnim->mPositionKeys[k].mValue.y,
+                            nodeAnim->mPositionKeys[k].mValue.z);
+
+                        keyframe.RotationQuat = XMFLOAT4(
+                            nodeAnim->mRotationKeys[k].mValue.x,
+                            nodeAnim->mRotationKeys[k].mValue.y,
+                            nodeAnim->mRotationKeys[k].mValue.z,
+                            nodeAnim->mRotationKeys[k].mValue.w);
+
+                        keyframe.Scale = XMFLOAT3(
+                            nodeAnim->mScalingKeys[k].mValue.x,
+                            nodeAnim->mScalingKeys[k].mValue.y,
+                            nodeAnim->mScalingKeys[k].mValue.z);
+
+                        boneAnimation.Keyframes.push_back(keyframe);
+
+                    }
+
+                    mBoneAnimation.push_back(boneAnimation);
                 }
 
-                BoneAnimation boneAnimation;
-
-                for (size_t k = 0; k < nodeAnim->mNumPositionKeys; k++)
-                {
-                    Keyframe keyframe;
-
-                    keyframe.TimePos = nodeAnim->mPositionKeys[k].mTime;
-
-                    keyframe.Translation = XMFLOAT3(
-                        nodeAnim->mPositionKeys[k].mValue.x,
-                        nodeAnim->mPositionKeys[k].mValue.y,
-                        nodeAnim->mPositionKeys[k].mValue.z);
-
-                    keyframe.RotationQuat = XMFLOAT4(
-                        nodeAnim->mRotationKeys[k].mValue.x,
-                        nodeAnim->mRotationKeys[k].mValue.y,
-                        nodeAnim->mRotationKeys[k].mValue.z,
-                        nodeAnim->mRotationKeys[k].mValue.w);
-
-                    keyframe.Scale = XMFLOAT3(
-                        nodeAnim->mNumScalingKeys,
-                        nodeAnim->mNumScalingKeys,
-                        nodeAnim->mNumScalingKeys);
-
-                    boneAnimation.Keyframes.push_back(keyframe);
-
-                }
-
-                mBoneAnimation.push_back(boneAnimation);
+                animations[animation->mName.C_Str()].BoneAnimations = mBoneAnimation;
             }
 
-            animations[animation->mName.C_Str()].BoneAnimations = mBoneAnimation;
         }
-
-
     }
 
     mSkinnedInfo.Set(boneIndexToParentIndex, boneOffsets, animations);
