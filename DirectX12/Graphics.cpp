@@ -496,7 +496,7 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
     auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
     
     SkinnedConstants skinnedConstants;
-
+    std::vector<Matrix> boneTransforms;
     // We only have one skinned model being animated.
     //mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
     //
@@ -506,6 +506,7 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
     //    std::end(mSkinnedModelInst->FinalTransforms),
     //    &skinnedConstants.BoneTransforms[0]);
 
+    int skinnedIndex = 0;
     for (auto& mesh : meshes)
     {
         for (auto& subset : mesh.subsets)
@@ -523,15 +524,26 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
                 _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
                 for (size_t i = 0; i < number_of_bones; i++)
                 {
+                    //boneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
                     XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
                 }
                 mesh.skeletal_animation.animation_tick += gt.DeltaTime();
+
+
             }
         }
+        currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
+        skinnedIndex++;
     }
 
+    //int i = 0;
+    //for (auto& boneTransform : boneTransforms)
+    //{
+    //    skinnedConstants.BoneTransforms[i] = boneTransform;
+    //    i++;
+    //}
+    
 
-    currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
 void Graphics::LoadContents()
@@ -1613,8 +1625,14 @@ void Graphics::BuildFrameResources()
 {
     for (int i = 0; i < gNumFrameResources; ++i)
     {
-        mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-            2, (UINT)mAllRitems.size(), mInstanceCount, (UINT)mMaterials.size(), 1));
+        mFrameResources.push_back
+        (
+            std::make_unique<FrameResource>
+            (
+                md3dDevice.Get(), 2, (UINT)mAllRitems.size(), mInstanceCount, 
+                (UINT)mMaterials.size(), meshes.size()
+            )
+        );
     }
 }
 
@@ -1821,6 +1839,7 @@ void Graphics::BuildRenderItems()
     }
 
 
+    int skinnedIndex = 0;
     //for (size_t i = 0; i < mModelMaterials.size(); i++)
     for (size_t i = 0; i < meshes.size(); i++)
     {
@@ -1857,7 +1876,8 @@ void Graphics::BuildRenderItems()
 
             // All render items for this solider.m3d instance share
             // the same skinned model instance.
-            model->SkinnedCBIndex = 0;
+            model->SkinnedCBIndex = i;
+            model->SkinnedFlag = true;
             //model->SkinnedModelInst = mSkinnedModelInst.get();
 
             mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(model.get());
@@ -1946,7 +1966,7 @@ void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
 
         cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
 
-        if (ri->SkinnedCBIndex == 0)
+        if (ri->SkinnedFlag)
         {
             D3D12_GPU_VIRTUAL_ADDRESS skinnedCBAddress = skinnedCB->GetGPUVirtualAddress() + ri->SkinnedCBIndex * skinnedCBByteSize;
             cmdList->SetGraphicsRootConstantBufferView(2, skinnedCBAddress);
@@ -2820,11 +2840,14 @@ void Graphics::LoadFBX(const std::wstring filename)
     _ASSERT_EXPR(import_status, importer->GetStatus().GetErrorString());
 
     fbxsdk::FbxGeometryConverter gemoetry_converter(manager);
-    if(!gemoetry_converter.Triangulate(scene, /*replace*/true));
-    {
-        std::cout << "Triangulate Failed" << std::endl;
-    }
-    
+    gemoetry_converter.Triangulate(scene, /*replace*/true);
+
+    //FbxAxisSystem OurAxisSystem(FbxAxisSystem::eDirectX);
+    //FbxAxisSystem SceneAxisSystem = scene->GetGlobalSettings().GetAxisSystem();
+    //if (SceneAxisSystem != OurAxisSystem)
+    //{
+    //    OurAxisSystem.ConvertScene(scene);
+    //}
 
     std::vector <FbxNode*> fetched_meshes;
     std::function<void(FbxNode*)> traverse = [&](FbxNode* node)
@@ -2944,7 +2967,7 @@ void Graphics::LoadFBX(const std::wstring filename)
         }
 
         std::vector<SkinnedVertex> vertices;
-        std::vector<uint32_t> indices;
+        std::vector<uint16_t> indices;
         u_int vertex_count = 0;
 
         //Tangent
@@ -3029,7 +3052,7 @@ void Graphics::LoadFBX(const std::wstring filename)
 
                 vertices.push_back(vertex);
 
-                indices.at(index_offset + index_of_vertex) = static_cast<UINT32>(vertex_count);
+                indices.at(index_offset + index_of_vertex) = static_cast<uint16_t>(vertex_count);
 
 
                 vertex_count += 1;
@@ -3039,8 +3062,8 @@ void Graphics::LoadFBX(const std::wstring filename)
 
         auto geo = std::make_unique<MeshGeometry>();
         geo->Name = _filename + std::to_string(i);
-
-        int a = 0;
+        
+        int submeshIndex = 0;
         for (auto item : mesh.subsets)
         {
             SubmeshGeometry submesh;
@@ -3049,15 +3072,13 @@ void Graphics::LoadFBX(const std::wstring filename)
             submesh.BaseVertexLocation = 0;
             submesh.Bounds = BoundingBox();
 
-            geo->DrawArgs["submesh" + std::to_string(a)] = submesh;
+            geo->DrawArgs["submesh" + std::to_string(submeshIndex)] = submesh;
+            submeshIndex++;
 
-            a++;
         }
-        a = 0;
-        
 
         const UINT vbByteSize = (UINT)vertices.size() * sizeof(SkinnedVertex);
-        const UINT ibByteSize = (UINT)indices.size() * sizeof(uint32_t);
+        const UINT ibByteSize = (UINT)indices.size() * sizeof(uint16_t);
 
         ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
         CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
@@ -3073,7 +3094,7 @@ void Graphics::LoadFBX(const std::wstring filename)
 
         geo->VertexByteStride = sizeof(SkinnedVertex);
         geo->VertexBufferByteSize = vbByteSize;
-        geo->IndexFormat = DXGI_FORMAT_R32_UINT;
+        geo->IndexFormat = DXGI_FORMAT_R16_UINT;
         geo->IndexBufferByteSize = ibByteSize;
 
 

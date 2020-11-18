@@ -179,6 +179,8 @@ struct RenderItem
 
 	// nullptr if this render-item is not animated by skinned mesh.
 	SkinnedModelInstance* SkinnedModelInst = nullptr;
+
+	bool SkinnedFlag = false;
 };
 
 enum class RenderLayer : int
@@ -241,13 +243,15 @@ private:
 
 	void AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix);
 
+	void LoadFBX(const std::wstring filename);
+
 	void Fetch_bone_influences(const FbxMesh* fbx_mesh, std::vector<bone_influences_per_control_point>& influences);
 
 	void Fetch_bone_matrices(const FbxMesh* fbx_mesh, std::vector<Bone>& skeletal, FbxTime time);
 
 	void Fetch_animations(FbxMesh* fbx_mesh, Skeletal_animation& skeletal_animation, u_int sampling_rate = 0);
 
-	void LoadFBX(const std::wstring filename);
+
 
 	void LoadContents();
 	void LoadTextures(const std::wstring filename, const std::string texName);
@@ -379,6 +383,6 @@ private:
 	0, 0, 0, 1
 	};
 
-	std::wstring fbx = L"../Models/Defeated.fbx";
-	int a = 0;
+	std::wstring fbx = L"../Models/Taunt.fbx";
+
 };
