@@ -129,11 +129,13 @@ UINT SkinnedData::BoneCount()const
 
 void SkinnedData::Set(std::vector<int>& boneHierarchy,
 	std::vector<XMFLOAT4X4>& boneOffsets,
-	std::unordered_map<std::string, AnimationClip>& animations)
+	std::unordered_map<std::string, AnimationClip>& animations,
+	DirectX::XMFLOAT4X4 globalInverseTransform)
 {
 	mBoneHierarchy = boneHierarchy;
 	mBoneOffsets = boneOffsets;
 	mAnimations = animations;
+	mGlobalInverseTransform = globalInverseTransform;
 }
 
 void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos, std::vector<XMFLOAT4X4>& finalTransforms)const
@@ -185,6 +187,7 @@ void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos,
 		XMMATRIX offset = XMLoadFloat4x4(&mBoneOffsets[i]);
 		XMMATRIX toRoot = XMLoadFloat4x4(&toRootTransforms[i]);
 		XMMATRIX finalTransform = XMMatrixMultiply(offset, toRoot);
+		finalTransform = XMMatrixMultiply(finalTransform, XMLoadFloat4x4(&mGlobalInverseTransform));
 		XMStoreFloat4x4(&finalTransforms[i], XMMatrixTranspose(finalTransform));
 	}
 }

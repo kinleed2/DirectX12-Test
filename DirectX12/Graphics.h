@@ -30,6 +30,8 @@ using namespace DirectX;
 using namespace DirectX::PackedVector;
 using namespace DirectX::SimpleMath;
 
+using namespace fbxsdk;
+
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "D3D12.lib")
 
@@ -47,7 +49,8 @@ struct ModelMaterial
 	std::string NormalMapName;
 };
 
-#define MAX_BONE_INFLUENCES 4
+static const UINT MAX_BONE_INFLUENCES = 4;
+static const UINT MAX_BONES = 128;
 
 struct SkinnedVertex
 {
@@ -59,12 +62,54 @@ struct SkinnedVertex
 	INT BoneIndices[MAX_BONE_INFLUENCES] = {};
 };
 
-struct BoneInfluence
+struct Subset
 {
-	int Index = 0;
-	float Weight = 0;
+	u_int index_start = 0;
+	u_int index_count = 0;
+	ModelMaterial material;
 };
-//typedef std::vector<BoneInfluence> bone_influences_per_control_point;
+
+struct bone_influence
+{
+	int index;
+	float weight;
+};
+typedef std::vector<bone_influence> bone_influences_per_control_point;
+
+
+
+
+
+struct Bone
+{
+	DirectX::XMFLOAT4X4 transform;
+};
+typedef std::vector<Bone> Skeletal;
+
+struct Skeletal_animation : public std::vector<Skeletal>
+{
+	float sampling_time = 1 / 24.0f;
+	float animation_tick = 0.0f;
+
+};
+
+struct Mesh
+{
+
+	std::vector<Subset> subsets;
+
+
+
+	Matrix global_transform = { 1, 0, 0, 0,
+											 0, 1, 0, 0,
+											 0, 0, 1, 0,
+											 0, 0, 0, 1 };
+	//UNIT22
+	std::vector<Bone> skeletal;
+	//UNIT23
+	Skeletal_animation skeletal_animation;
+};
+
 
 struct SkinnedModelInstance
 {
@@ -186,7 +231,7 @@ private:
 
 	void UpdateSkinnedCBs(const GameTimer& gt);
 
-	void LoadModelData(const std::wstring filename, const std::string modelName);
+	void LoadModelData(const std::wstring filename);
 	bool LoadModel(const std::wstring filename);
 
 	void processNode(aiNode* node, const aiScene* scene);
@@ -195,6 +240,14 @@ private:
 
 
 	void AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix);
+
+	void Fetch_bone_influences(const FbxMesh* fbx_mesh, std::vector<bone_influences_per_control_point>& influences);
+
+	void Fetch_bone_matrices(const FbxMesh* fbx_mesh, std::vector<Bone>& skeletal, FbxTime time);
+
+	void Fetch_animations(FbxMesh* fbx_mesh, Skeletal_animation& skeletal_animation, u_int sampling_rate = 0);
+
+	void LoadFBX(const std::wstring filename);
 
 	void LoadContents();
 	void LoadTextures(const std::wstring filename, const std::string texName);
@@ -315,4 +368,17 @@ private:
 	std::vector<UINT> mVertexId;
 	std::vector<float> mWeight;
 
+	std::vector<Mesh> meshes;
+
+
+	// convert coordinate system from 'UP:+Z FRONT:+Y RIGHT-HAND' to 'UP:+Y FRONT:+Z LEFT-HAND'
+	XMFLOAT4X4 coordinate_conversion = {
+	1, 0, 0, 0,
+	0, 0, 1, 0,
+	0, 1, 0, 0,
+	0, 0, 0, 1
+	};
+
+	std::wstring fbx = L"../Models/Defeated.fbx";
+	int a = 0;
 };
