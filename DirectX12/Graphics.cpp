@@ -46,6 +46,7 @@ bool Graphics::Initialize()
     BuildShadersAndInputLayout();
     BuildShapeGeometry();
     BuildSkullGeometry();
+    
     //BuildTreeSpritesGeometry();
     //BuildLandGeometry();
     //BuildWavesGeometry();
@@ -53,6 +54,8 @@ bool Graphics::Initialize()
 
     BuildMaterials();
     BuildRenderItems();
+    BuildBoneRitems();
+    BuildSkinnedRenderItems();
     BuildInstanceRenderItems();
     BuildFrameResources();
     BuildPSOs();
@@ -120,7 +123,7 @@ void Graphics::Update(const GameTimer& gt)
     //AnimateMaterials(gt);
     UpdateInstanceData(gt);
     UpdateObjectCBs(gt);
-    UpdateSkinnedCBs(gt);
+    //UpdateSkinnedCBs(gt);
     UpdateMaterialBuffer(gt);
     UpdateShadowTransform(gt);
     UpdateMainPassCB(gt);
@@ -172,15 +175,15 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
 
     if (GetAsyncKeyState('1') & 0x8000)
     {
-        if(!mFrustumCullingEnabled) std::cout << "************\n Frustum Culling on \n************\n";
+        if (!mFrustumCullingEnabled) std::cout << "************\n Frustum Culling on \n************\n";
         mFrustumCullingEnabled = true;
-        
+
     }
     if (GetAsyncKeyState('2') & 0x8000)
     {
         if (mFrustumCullingEnabled) std::cout << "************\n Frustum Culling off \n************\n";
         mFrustumCullingEnabled = false;
-        
+
     }
     mCamera.UpdateViewMatrix();
 
@@ -193,6 +196,11 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
         XMVECTOR lightDir = XMLoadFloat3(&mBaseLightDirections[i]);
         lightDir = XMVector3TransformNormal(lightDir, R);
         XMStoreFloat3(&mRotatedLightDirections[i], lightDir);
+    }
+
+    if(GetAsyncKeyState('R') & 0x8000)
+    {
+        UpdateSkinnedCBs(gt);
     }
 }
 
@@ -493,7 +501,6 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
 
 void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 {
-    auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
     
     SkinnedConstants skinnedConstants;
     std::vector<Matrix> boneTransforms;
@@ -528,12 +535,13 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
                     XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
                 }
                 mesh.skeletal_animation.animation_tick += gt.DeltaTime();
-
-
             }
+            auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+
+            currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
+            skinnedIndex++;
         }
-        currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
-        skinnedIndex++;
+        
     }
 
     //int i = 0;
@@ -549,7 +557,7 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 void Graphics::LoadContents()
 {
 
-    //LoadModelData(L"../Models/jx32.fbx");
+    //LoadModelData(fbx);
     //
     //mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
     //mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
@@ -627,7 +635,6 @@ void Graphics::LoadContents()
 
     
 }
-
 
 void Graphics::LoadTextures(const std::wstring filename, std::string texName)
 {
@@ -1630,7 +1637,7 @@ void Graphics::BuildFrameResources()
             std::make_unique<FrameResource>
             (
                 md3dDevice.Get(), 2, (UINT)mAllRitems.size(), mInstanceCount, 
-                (UINT)mMaterials.size(), meshes.size()
+                (UINT)mMaterials.size(), mRitemLayer[(int)RenderLayer::SkinnedOpaque].size()
             )
         );
     }
@@ -1837,8 +1844,62 @@ void Graphics::BuildRenderItems()
         mAllRitems.push_back(std::move(leftSphereRitem));
         mAllRitems.push_back(std::move(rightSphereRitem));
     }
+}
 
+void Graphics::BuildBoneRitems()
+{
 
+    for (auto& mesh : meshes)
+    {
+        for (auto& subset : mesh.subsets)
+        {
+            if (mesh.skeletal_animation.size() > 0)
+            {
+                int frame = mesh.skeletal_animation.animation_tick / mesh.skeletal_animation.sampling_time;
+                if (frame > mesh.skeletal_animation.size() - 1)
+                {
+                    frame = 0;
+                    mesh.skeletal_animation.animation_tick = 0;
+                }
+                std::vector<Bone>& skeletal = mesh.skeletal_animation.at(frame);
+                size_t number_of_bones = skeletal.size();
+                _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
+                for (size_t i = 0; i < number_of_bones; i++)
+                {
+                    mBoneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
+                }
+            }
+        }
+
+    }
+
+    int objCBIndex = mAllRitems.size();
+
+    for (size_t i = 0; i < mBoneTransforms.size(); i++)
+    {
+        auto boneRitem = std::make_unique<RenderItem>();
+
+        XMStoreFloat4x4(&boneRitem->World, mBoneTransforms[i]);
+
+        boneRitem->TexTransform = MathHelper::Identity4x4();
+        boneRitem->ObjCBIndex = objCBIndex++;
+        boneRitem->Mat = mMaterials["bricks0"].get();
+        boneRitem->Geo = mGeometries["shapeGeo"].get();
+        boneRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        boneRitem->IndexCount = boneRitem->Geo->DrawArgs["sphere"].IndexCount;
+        boneRitem->StartIndexLocation = boneRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
+        boneRitem->BaseVertexLocation = boneRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
+
+        mRitemLayer[(int)RenderLayer::Bone].push_back(boneRitem.get());
+        mAllRitems.push_back(std::move(boneRitem));
+
+    }
+
+}
+
+void Graphics::BuildSkinnedRenderItems()
+{
+    int objCBIndex = mAllRitems.size();
     int skinnedIndex = 0;
     //for (size_t i = 0; i < mModelMaterials.size(); i++)
     for (size_t i = 0; i < meshes.size(); i++)
@@ -1850,7 +1911,8 @@ void Graphics::BuildRenderItems()
             Matrix modelScale = XMMatrixScaling(0.01f, 0.01f, 0.01f);
             Matrix modelRot = XMMatrixRotationX(-XM_PIDIV2);
             Matrix modelOffset = XMMatrixTranslation(0.0f, 0.0f, -10.0f);
-            model->World = modelScale * modelOffset * meshes[i].global_transform;
+
+            model->World = modelScale * modelOffset;
 
             model->ObjCBIndex = objCBIndex++;
             //if (mModelMaterials[i].Name != "")
@@ -1864,7 +1926,7 @@ void Graphics::BuildRenderItems()
             model->Mat = mMaterials["mirror0"].get();
 
             model->Geo = mGeometries[WstringToString(fbx) + std::to_string(i)].get();
-            model->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            model->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
 
             model->IndexCount = model->Geo->DrawArgs["submesh" + std::to_string(j)].IndexCount;
             model->StartIndexLocation = model->Geo->DrawArgs["submesh" + std::to_string(j)].StartIndexLocation;
@@ -1876,7 +1938,7 @@ void Graphics::BuildRenderItems()
 
             // All render items for this solider.m3d instance share
             // the same skinned model instance.
-            model->SkinnedCBIndex = i;
+            model->SkinnedCBIndex = skinnedIndex++;
             model->SkinnedFlag = true;
             //model->SkinnedModelInst = mSkinnedModelInst.get();
 
@@ -1884,7 +1946,6 @@ void Graphics::BuildRenderItems()
             mAllRitems.push_back(std::move(model));
         }
     }
-
 }
 
 void Graphics::BuildInstanceRenderItems()
@@ -2095,8 +2156,8 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->SetGraphicsRootDescriptorTable(5, skyTexDescriptor);
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
-
+    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Bone]);
 
     mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
@@ -2104,11 +2165,11 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->SetPipelineState(mPSOs["debug"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
 
-    mCommandList->SetPipelineState(mPSOs["instance"].Get());
-    DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
+    //mCommandList->SetPipelineState(mPSOs["instance"].Get());
+    //DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
 
-    mCommandList->SetPipelineState(mPSOs["sky"].Get());
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Sky]);
+    //mCommandList->SetPipelineState(mPSOs["sky"].Get());
+    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Sky]);
 
     // Indicate a state transition on the resource usage.
     mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -3064,7 +3125,7 @@ void Graphics::LoadFBX(const std::wstring filename)
         geo->Name = _filename + std::to_string(i);
         
         int submeshIndex = 0;
-        for (auto item : mesh.subsets)
+        for (auto & item : mesh.subsets)
         {
             SubmeshGeometry submesh;
             submesh.IndexCount = item.index_count;

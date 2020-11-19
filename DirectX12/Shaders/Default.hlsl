@@ -59,7 +59,7 @@ VertexOut VS(VertexIn vin)
 
 		posL += (vin.BoneWeights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]])).xyz;
 		normalL += (vin.BoneWeights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
-		tangentL += (vin.BoneWeights[i] * mul(vin.TangentL.xyz, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
+		//tangentL += (vin.BoneWeights[i] * mul(vin.TangentL.xyz, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
 	}
 
 	vin.PosL = posL;

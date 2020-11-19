@@ -88,7 +88,7 @@ typedef std::vector<Bone> Skeletal;
 
 struct Skeletal_animation : public std::vector<Skeletal>
 {
-	float sampling_time = 1 / 24.0f;
+	float sampling_time = 1 / 30.0f;
 	float animation_tick = 0.0f;
 
 };
@@ -188,6 +188,7 @@ enum class RenderLayer : int
 	Opaque = 0,
 	InstanceOpaque,
 	SkinnedOpaque,
+	Bone,
 	OpaqueDynamicReflectors,
 	Sky,
 	Mirrors,
@@ -269,6 +270,8 @@ private:
 	void BuildFrameResources();
 	void BuildMaterials();
 	void BuildRenderItems();
+	void BuildBoneRitems();
+	void BuildSkinnedRenderItems();
 	void BuildInstanceRenderItems();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
@@ -374,7 +377,7 @@ private:
 
 	std::vector<Mesh> meshes;
 
-
+	std::vector<Matrix> mBoneTransforms;
 	// convert coordinate system from 'UP:+Z FRONT:+Y RIGHT-HAND' to 'UP:+Y FRONT:+Z LEFT-HAND'
 	XMFLOAT4X4 coordinate_conversion = {
 	1, 0, 0, 0,
