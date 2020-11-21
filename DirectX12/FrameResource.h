@@ -12,6 +12,7 @@ struct ObjectConstants
     UINT     ObjPad0;
     UINT     ObjPad1;
     UINT     ObjPad2;
+    DirectX::XMFLOAT4X4 bone_transforms[128];
 };
 
 struct PassConstants

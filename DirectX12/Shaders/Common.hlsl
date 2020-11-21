@@ -80,6 +80,7 @@ cbuffer cbPerObject : register(b0)
 	uint gObjPad0;
 	uint gObjPad1;
 	uint gObjPad2;
+    row_major float4x4 bone_transforms[128];
 };
 
 cbuffer cbSkinned : register(b1)

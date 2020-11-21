@@ -245,10 +245,29 @@ void Graphics::UpdateObjectCBs(const GameTimer& gt)
             XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
             objConstants.MaterialIndex = e->Mat->MatCBIndex;
 
+            if (e->SkinnedFlag)
+            {
+                if (meshes[e->SkinnedCBIndex].skeletal_animation.size() > 0)
+                {
+                    int frame = meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick / meshes[e->SkinnedCBIndex].skeletal_animation.sampling_time;
+                    if (frame > meshes[e->SkinnedCBIndex].skeletal_animation.size() - 1)
+                    {
+                        frame = 0;
+                        meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick = 0;
+                    }
+                    std::vector<Bone>& skeletal = meshes[e->SkinnedCBIndex].skeletal_animation.at(frame);
+                    size_t number_of_bones = skeletal.size();
+                    _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
+                    for (size_t i = 0; i < number_of_bones; i++)
+                    {
+                        XMStoreFloat4x4(&objConstants.bone_transforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
+                    }
+                    meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick += gt.DeltaTime();
+                }                
+            }
             currObjectCB->CopyData(e->ObjCBIndex, objConstants);
-
             // Next FrameResource need to be updated too.
-            e->NumFramesDirty--;
+            //e->NumFramesDirty--;
         }
     }
 }
@@ -501,7 +520,7 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
 
 void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 {
-    
+    auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
     SkinnedConstants skinnedConstants;
     std::vector<Matrix> boneTransforms;
     // We only have one skinned model being animated.
@@ -536,12 +555,14 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
                 }
                 mesh.skeletal_animation.animation_tick += gt.DeltaTime();
             }
-            auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+            
 
-            currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
-            skinnedIndex++;
+            
+          
         }
-        
+
+        currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
+        skinnedIndex++;
     }
 
     //int i = 0;
@@ -1938,13 +1959,14 @@ void Graphics::BuildSkinnedRenderItems()
 
             // All render items for this solider.m3d instance share
             // the same skinned model instance.
-            model->SkinnedCBIndex = skinnedIndex++;
+            model->SkinnedCBIndex = skinnedIndex;
             model->SkinnedFlag = true;
             //model->SkinnedModelInst = mSkinnedModelInst.get();
 
             mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(model.get());
             mAllRitems.push_back(std::move(model));
         }
+        skinnedIndex++;
     }
 }
 
@@ -2157,7 +2179,7 @@ void Graphics::Draw(const GameTimer& gt)
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Bone]);
+    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Bone]);
 
     mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
