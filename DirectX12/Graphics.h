@@ -90,6 +90,7 @@ struct Skeletal_animation : public std::vector<Skeletal>
 {
 	float sampling_time = 1 / 30.0f;
 	float animation_tick = 0.0f;
+	std::string name;
 
 };
 
@@ -97,8 +98,6 @@ struct Mesh
 {
 
 	std::vector<Subset> subsets;
-
-
 
 	Matrix global_transform = { 1, 0, 0, 0,
 											 0, 1, 0, 0,

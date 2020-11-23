@@ -123,7 +123,7 @@ void Graphics::Update(const GameTimer& gt)
     //AnimateMaterials(gt);
     UpdateInstanceData(gt);
     UpdateObjectCBs(gt);
-    //UpdateSkinnedCBs(gt);
+    UpdateSkinnedCBs(gt);
     UpdateMaterialBuffer(gt);
     UpdateShadowTransform(gt);
     UpdateMainPassCB(gt);
@@ -520,50 +520,49 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
 
 void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 {
-    auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
-    SkinnedConstants skinnedConstants;
-    std::vector<Matrix> boneTransforms;
-    // We only have one skinned model being animated.
-    //mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
+    //auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+    //SkinnedConstants skinnedConstants;
     //
+    //std::vector<Matrix> boneTransforms;
+    ////// We only have one skinned model being animated.
+    ////mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
+    ////
    
-    //std::copy(
-    //    std::begin(mSkinnedModelInst->FinalTransforms),
-    //    std::end(mSkinnedModelInst->FinalTransforms),
-    //    &skinnedConstants.BoneTransforms[0]);
+    ////std::copy(
+    ////    std::begin(mSkinnedModelInst->FinalTransforms),
+    ////    std::end(mSkinnedModelInst->FinalTransforms),
+    ////    &skinnedConstants.BoneTransforms[0]);
+    ////currSkinnedCB->CopyData(0, skinnedConstants);
 
-    int skinnedIndex = 0;
-    for (auto& mesh : meshes)
-    {
-        for (auto& subset : mesh.subsets)
-        {
-            if (mesh.skeletal_animation.size() > 0)
-            {
-                int frame = mesh.skeletal_animation.animation_tick / mesh.skeletal_animation.sampling_time;
-                if (frame > mesh.skeletal_animation.size() - 1)
-                {
-                    frame = 0;
-                    mesh.skeletal_animation.animation_tick = 0;
-                }
-                std::vector<Bone>& skeletal = mesh.skeletal_animation.at(frame);
-                size_t number_of_bones = skeletal.size();
-                _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
-                for (size_t i = 0; i < number_of_bones; i++)
-                {
-                    //boneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
-                    XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
-                }
-                mesh.skeletal_animation.animation_tick += gt.DeltaTime();
-            }
-            
+    //int skinnedIndex = 0;
+    //for (auto& mesh : meshes)
+    //{
+    //    for (auto& subset : mesh.subsets)
+    //    {
+    //        if (mesh.skeletal_animation.size() > 0)
+    //        {
+    //            int frame = mesh.skeletal_animation.animation_tick / mesh.skeletal_animation.sampling_time;
+    //            if (frame > mesh.skeletal_animation.size() - 1)
+    //            {
+    //                frame = 0;
+    //                mesh.skeletal_animation.animation_tick = 0;
+    //            }
+    //            std::vector<Bone>& skeletal = mesh.skeletal_animation.at(frame);
+    //            size_t number_of_bones = skeletal.size();
+    //            _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
+    //            for (size_t i = 0; i < number_of_bones; i++)
+    //            {
+    //                boneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
+    //                XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
+    //            }
+    //            mesh.skeletal_animation.animation_tick += gt.DeltaTime();
+    //        }
+    //      
+    //    }
 
-            
-          
-        }
-
-        currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
-        skinnedIndex++;
-    }
+    //    currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
+    //    skinnedIndex++;
+    //}
 
     //int i = 0;
     //for (auto& boneTransform : boneTransforms)
@@ -571,8 +570,8 @@ void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
     //    skinnedConstants.BoneTransforms[i] = boneTransform;
     //    i++;
     //}
-    
-
+    //
+    //currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
 void Graphics::LoadContents()
@@ -583,8 +582,8 @@ void Graphics::LoadContents()
     //mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
     //mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
     //mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
-    ////mSkinnedModelInst->ClipName = "mixamo.com";
-    //mSkinnedModelInst->ClipName = "seasun animation";
+    //mSkinnedModelInst->ClipName = "mixamo.com";
+    ////mSkinnedModelInst->ClipName = "seasun animation";
     //mSkinnedModelInst->TimePos = 0.0f;
     
 
@@ -1922,7 +1921,7 @@ void Graphics::BuildSkinnedRenderItems()
 {
     int objCBIndex = mAllRitems.size();
     int skinnedIndex = 0;
-    //for (size_t i = 0; i < mModelMaterials.size(); i++)
+
     for (size_t i = 0; i < meshes.size(); i++)
     {
         for (size_t j = 0; j < meshes[i].subsets.size(); j++)
@@ -1936,15 +1935,15 @@ void Graphics::BuildSkinnedRenderItems()
             model->World = modelScale * modelOffset;
 
             model->ObjCBIndex = objCBIndex++;
-            //if (mModelMaterials[i].Name != "")
-            //{
-            //    model->Mat = mMaterials[mModelMaterials[i].Name].get();
-            //}
-            //else
-            //{
-            //    model->Mat = mMaterials["mirror0"].get();
-            //}
-            model->Mat = mMaterials["mirror0"].get();
+            if (meshes[i].subsets[j].material.Name != "")
+            {
+                model->Mat = mMaterials[meshes[i].subsets[j].material.Name].get();
+            }
+            else
+            {
+                model->Mat = mMaterials["mirror0"].get();
+            }
+ 
 
             model->Geo = mGeometries[WstringToString(fbx) + std::to_string(i)].get();
             model->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
@@ -1952,10 +1951,6 @@ void Graphics::BuildSkinnedRenderItems()
             model->IndexCount = model->Geo->DrawArgs["submesh" + std::to_string(j)].IndexCount;
             model->StartIndexLocation = model->Geo->DrawArgs["submesh" + std::to_string(j)].StartIndexLocation;
             model->BaseVertexLocation = 0;
-
-            //model->IndexCount = model->Geo->DrawArgs["submesh"].IndexCount;
-            //model->StartIndexLocation = model->Geo->DrawArgs["submesh"].StartIndexLocation;
-            //model->BaseVertexLocation = 0;
 
             // All render items for this solider.m3d instance share
             // the same skinned model instance.
@@ -2178,7 +2173,7 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->SetGraphicsRootDescriptorTable(5, skyTexDescriptor);
 
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
-    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
     //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Bone]);
 
     mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
@@ -2187,11 +2182,11 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->SetPipelineState(mPSOs["debug"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
 
-    //mCommandList->SetPipelineState(mPSOs["instance"].Get());
-    //DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
+    mCommandList->SetPipelineState(mPSOs["instance"].Get());
+    DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
 
-    //mCommandList->SetPipelineState(mPSOs["sky"].Get());
-    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Sky]);
+    mCommandList->SetPipelineState(mPSOs["sky"].Get());
+    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Sky]);
 
     // Indicate a state transition on the resource usage.
     mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -2353,9 +2348,6 @@ void Graphics::LoadModelData(const std::wstring filename)
         {
             for (UINT meshNum = 0; meshNum < maxMeshNum; ++meshNum)
             {
-                std::vector<SkinnedVertex> vertices;
-                std::vector<UINT16> indices;
-
                 std::vector<std::vector<bone_influence>> boneInfluences;
 
                 auto mesh = scene->mMeshes[meshNum];
@@ -2399,18 +2391,18 @@ void Graphics::LoadModelData(const std::wstring filename)
                             bone_influence influence;
                         
                             influence.weight = vertexWeight.mWeight;
-                            influence.index = j;
+                            influence.index = BoneIndex;
                         
                             boneInfluence.push_back(influence);
                         }
-                        
-                        
                     }
-
                 }
 
                 assert(mesh->HasPositions());
                 assert(mesh->HasNormals());
+
+                std::vector<SkinnedVertex> vertices;
+                std::vector<UINT16> indices;
 
                 vertices.reserve(mesh->mNumVertices);
 
@@ -2513,19 +2505,24 @@ void Graphics::LoadModelData(const std::wstring filename)
 
                     aiNode* node = scene->mRootNode->FindNode(nodeAnim->mNodeName);
 
-                    //boneIndex[nodeAnim->mNodeName.C_Str()] = j;
-
                     std::cout << node->mName.C_Str() << std::endl;
 
                     aiNode* parentNode = node->mParent;
 
-                    if (boneIndex.find(parentNode->mName.C_Str()) == boneIndex.end())
+                    std::string nodeName = node->mName.C_Str();
+                    std::string parentName = parentNode->mName.C_Str();
+
+
+                    if(nodeName.find("$")!= std::string::npos)  nodeName.erase(nodeName.find("_"));
+                    if(parentName.find("$") != std::string::npos)  parentName.erase(parentName.find("_"));
+
+                    if (boneIndex.find(parentName) == boneIndex.end())
                     {
-                        boneIndexToParentIndex[boneIndex[node->mName.C_Str()]] = (boneIndex[node->mName.C_Str()]);
-                    }
+                        boneIndexToParentIndex[boneIndex[nodeName]] = (boneIndex[nodeName]);
+                    }   
                     else
                     {
-                        boneIndexToParentIndex[boneIndex[node->mName.C_Str()]] = (boneIndex[parentNode->mName.C_Str()]);
+                        boneIndexToParentIndex[boneIndex[nodeName]] = (boneIndex[parentName]);
                     }
 
                     BoneAnimation boneAnimation;
@@ -2879,6 +2876,7 @@ void Graphics::Fetch_animations(FbxMesh* fbx_mesh, Skeletal_animation& skeletal_
         skeletal_animation.sampling_time = sampling_time;
         skeletal_animation.animation_tick = 0.0f;
         FbxString* animation_stack_name = array_of_animation_stack_names.GetAt(0);
+        skeletal_animation.name = *animation_stack_name;
         FbxAnimStack* current_animation_stack
             = fbx_mesh->GetScene()->FindMember<FbxAnimStack>(animation_stack_name->Buffer());
         fbx_mesh->GetScene()->SetCurrentAnimationStack(current_animation_stack);

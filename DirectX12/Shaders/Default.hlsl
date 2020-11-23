@@ -57,8 +57,8 @@ VertexOut VS(VertexIn vin)
 		// Assume no nonuniform scaling when transforming normals, so 
 		// that we do not have to use the inverse-transpose.
 
-		posL += (vin.BoneWeights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]])).xyz;
-		normalL += (vin.BoneWeights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
+		posL += (vin.BoneWeights[i] * mul(float4(vin.PosL, 1.0f), bone_transforms[vin.BoneIndices[i]])).xyz;
+		normalL += (vin.BoneWeights[i] * mul(vin.NormalL, (float3x3)bone_transforms[vin.BoneIndices[i]]));
 		//tangentL += (vin.BoneWeights[i] * mul(vin.TangentL.xyz, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
 	}
 
