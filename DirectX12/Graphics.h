@@ -8,8 +8,11 @@
 #include "FrameResource.h"
 #include "SkinnedData.h"
 #include "ShadowMap.h"
+#include "FBXMesh.h"
 
 #include "DirectXTex.h"
+
+#include <map>
 
 //DirectXTK 12
 #include <DDSTextureLoader.h>
@@ -17,10 +20,6 @@
 #include <DirectXMath.h>
 #include <SimpleMath.h>
 
-//Assimp
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-#include <assimp/Importer.hpp>
 
 //FBX SDK
 #include <fbxsdk.h>
@@ -31,9 +30,6 @@ using namespace DirectX::PackedVector;
 using namespace DirectX::SimpleMath;
 
 using namespace fbxsdk;
-
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "D3D12.lib")
 
 struct ModelMaterial
 {
@@ -47,26 +43,17 @@ struct ModelMaterial
 	std::string MaterialTypeName;
 	std::string DiffuseMapName;
 	std::string NormalMapName;
+	std::string SpecularName;
 };
 
-static const UINT MAX_BONE_INFLUENCES = 4;
-static const UINT MAX_BONES = 128;
 
-struct SkinnedVertex
-{
-	DirectX::XMFLOAT3 Pos;
-	DirectX::XMFLOAT3 Normal;
-	DirectX::XMFLOAT2 TexC;
-	DirectX::XMFLOAT3 TangentU;
-	FLOAT BoneWeights[MAX_BONE_INFLUENCES] = { 1, 0, 0, 0 };
-	INT BoneIndices[MAX_BONE_INFLUENCES] = {};
-};
 
 struct Subset
 {
 	u_int index_start = 0;
 	u_int index_count = 0;
 	ModelMaterial material;
+	std::string name;
 };
 
 struct bone_influence
@@ -76,10 +63,6 @@ struct bone_influence
 };
 typedef std::vector<bone_influence> bone_influences_per_control_point;
 
-
-
-
-
 struct Bone
 {
 	DirectX::XMFLOAT4X4 transform;
@@ -88,15 +71,14 @@ typedef std::vector<Bone> Skeletal;
 
 struct Skeletal_animation : public std::vector<Skeletal>
 {
-	float sampling_time = 1 / 30.0f;
+	float sampling_time = 1 / 24.0f;
 	float animation_tick = 0.0f;
 	std::string name;
-
 };
 
 struct Mesh
 {
-
+	std::string name;
 	std::vector<Subset> subsets;
 
 	Matrix global_transform = { 1, 0, 0, 0,
@@ -106,7 +88,7 @@ struct Mesh
 	//UNIT22
 	std::vector<Bone> skeletal;
 	//UNIT23
-	Skeletal_animation skeletal_animation;
+	std::map<std::string, Skeletal_animation> skeletal_animations;
 };
 
 
@@ -208,6 +190,8 @@ public:
 	~Graphics();
 
 	virtual bool Initialize()override;
+	static std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
+
 
 private:
 	virtual void CreateRtvAndDsvDescriptorHeaps()override;
@@ -233,25 +217,13 @@ private:
 
 	void UpdateSkinnedCBs(const GameTimer& gt);
 
-	void LoadModelData(const std::wstring filename);
-	bool LoadModel(const std::wstring filename);
-
-	void processNode(aiNode* node, const aiScene* scene);
-	void processMesh(aiMesh* mesh, const aiScene* scene, std::vector<Vertex>& vertices, std::vector<std::uint16_t>& indices);
-	void LoadMaterialTextures(const aiScene* scene);
-
-
-	void AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix);
-
 	void LoadFBX(const std::wstring filename);
+
+	void Fetch_bone_animations(std::vector <FbxNode*> bone_nodes, std::map<std::string, Skeletal_animation>& skeletal_animations, u_int sampling_rate = 0);
 
 	void Fetch_bone_influences(const FbxMesh* fbx_mesh, std::vector<bone_influences_per_control_point>& influences);
 
-	void Fetch_bone_matrices(const FbxMesh* fbx_mesh, std::vector<Bone>& skeletal, FbxTime time);
-
-	void Fetch_animations(FbxMesh* fbx_mesh, Skeletal_animation& skeletal_animation, u_int sampling_rate = 0);
-
-
+	void Fetch_bone_matrices(const FbxMesh* fbx_mesh);
 
 	void LoadContents();
 	void LoadTextures(const std::wstring filename, const std::string texName);
@@ -269,7 +241,6 @@ private:
 	void BuildFrameResources();
 	void BuildMaterials();
 	void BuildRenderItems();
-	void BuildBoneRitems();
 	void BuildSkinnedRenderItems();
 	void BuildInstanceRenderItems();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
@@ -278,7 +249,6 @@ private:
 
 	void DrawSceneToShadowMap();
 
-	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
 
 	float GetHillsHeight(float x, float z)const;
 	XMFLOAT3 GetHillsNormal(float x, float z)const;
@@ -299,8 +269,6 @@ private:
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
-
-	std::vector<ModelMaterial> mModelMaterials;
 	std::vector<std::string> mModelTextureNames;
 	
 	UINT mModelSrvHeapStart = 0;
@@ -376,7 +344,7 @@ private:
 
 	std::vector<Mesh> meshes;
 
-	std::vector<Matrix> mBoneTransforms;
+	std::vector<Matrix> mCharacterforms;
 	// convert coordinate system from 'UP:+Z FRONT:+Y RIGHT-HAND' to 'UP:+Y FRONT:+Z LEFT-HAND'
 	XMFLOAT4X4 coordinate_conversion = {
 	1, 0, 0, 0,
@@ -385,6 +353,22 @@ private:
 	0, 0, 0, 1
 	};
 
-	std::wstring fbx = L"../Models/Taunt.fbx";
+	std::wstring fbx = L"../Models/Hip Hop Dancing.fbx";
+	std::vector<std::string> animation_name;
+	int animation_index = 0;
+	float animation_speed = 1.0f;
 
+	std::map<std::string, Skeletal_animation> extra_animations;
+
+	// this matrix trnasforms coordinates of the initial pose from mesh space to global space
+	FbxAMatrix mReference_global_init_position[65];
+	// this matrix trnasforms coordinates of the initial pose from bone_node space to global space
+	FbxAMatrix mCluster_global_init_position[65];
+
+	bool sunTurn = true;
+	bool debugFlag = false;
+	bool skull = false;
+	bool model = false;
+	bool object = false;
+	//std::unique_ptr<FBXMesh> fbxmesh;
 };

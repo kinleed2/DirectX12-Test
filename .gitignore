@@ -108,3 +108,7 @@ DirectX12/.vs/DirectX12/v16/ipch/AutoPCH/5701e7b35b75c21c/MAIN.ipch
 DirectX12\.vs\DirectX12\v16\ipch\AutoPCH\360582301fba4fa8/PSTDINT.ipch
 FBX SDK/2020.0.1/lib/vs2017/x64/debug/libfbxsdk-mt.lib
 FBX SDK/2020.0.1/lib/vs2017/x64/debug/libfbxsdk-md.lib
+/Build_VS16/x64/Debug
+*.ipch
+/DirectX12/x64/Release/vc142.pdb
+*.obj

@@ -18,7 +18,7 @@ int WINAPI main(HINSTANCE hInstance, HINSTANCE prevInstance,
     }
     catch (DxException& e)
     {
-        MessageBox(nullptr, e.ToString().c_str(), L"HR Failed", MB_OK);
+        MessageBoxW(nullptr, e.ToString().c_str(), L"HR Failed", MB_OK);
         return 0;
     }
 }

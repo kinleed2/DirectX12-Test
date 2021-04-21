@@ -1,0 +1,37 @@
+﻿DirectXTex.lib(DirectXTexTGA.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexTGA.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexImage.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexImage.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexUtil.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexUtil.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexConvert.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexConvert.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexMipMaps.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexMipMaps.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexCompress.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(DirectXTexCompress.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC4BC5.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC4BC5.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC6HBC7.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTex.lib(BC6HBC7.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(DDSTextureLoader.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(DDSTextureLoader.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(WICTextureLoader.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(WICTextureLoader.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(ResourceUploadBatch.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(ResourceUploadBatch.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(pch.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(pch.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(GraphicsMemory.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(GraphicsMemory.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(LinearAllocator.obj) : error LNK2038: '_ITERATOR_DEBUG_LEVEL' の不一致が検出されました。値 '0' が 2 の値 'Camera.obj' と一致しません。
+DirectXTK12.lib(LinearAllocator.obj) : error LNK2038: 'RuntimeLibrary' の不一致が検出されました。値 'MD_DynamicRelease' が MDd_DynamicDebug の値 'Camera.obj' と一致しません。
+d3dApp.obj : error LNK2001: 外部シンボル __imp__CrtDbgReport は未解決です
+d3dApp.obj : error LNK2001: 外部シンボル __imp__invalid_parameter は未解決です
+Graphics.obj : error LNK2001: 外部シンボル __imp__CrtDbgReportW は未解決です
+main.obj : error LNK2001: 外部シンボル __imp__CrtSetDbgFlag は未解決です
+msvcprtd.lib(locale0_implib.obj) : error LNK2001: 外部シンボル __imp__free_dbg は未解決です
+msvcprtd.lib(locale0_implib.obj) : error LNK2001: 外部シンボル __imp__malloc_dbg は未解決です
+D:\Graphics-Engine\DirectX12\x64\Release\DirectX12.exe : fatal error LNK1120: 6 件の未解決の外部参照

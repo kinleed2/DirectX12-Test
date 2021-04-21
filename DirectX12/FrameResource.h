@@ -12,7 +12,6 @@ struct ObjectConstants
     UINT     ObjPad0;
     UINT     ObjPad1;
     UINT     ObjPad2;
-    DirectX::XMFLOAT4X4 bone_transforms[128];
 };
 
 struct PassConstants
@@ -86,7 +85,7 @@ struct MaterialData
 
     UINT DiffuseMapIndex = 0;
     UINT NormalMapIndex = 0;
-    UINT MaterialPad0;
+    UINT SpecularMapIndex = 0;
     UINT MaterialPad1;
 };
 
@@ -108,7 +107,18 @@ struct Vertex
     DirectX::XMFLOAT3 TangentU;
 };
 
+static const UINT MAX_BONE_INFLUENCES = 4;
+static const UINT MAX_BONES = 128;
 
+struct SkinnedVertex
+{
+    DirectX::XMFLOAT3 Pos;
+    DirectX::XMFLOAT3 Normal;
+    DirectX::XMFLOAT2 TexC;
+    DirectX::XMFLOAT3 TangentU;
+    FLOAT BoneWeights[MAX_BONE_INFLUENCES] = { 1, 0, 0, 0 };
+    INT BoneIndices[MAX_BONE_INFLUENCES] = {};
+};
 
 // Stores the resources needed for the CPU to build the command lists
 // for a frame.  

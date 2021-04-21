@@ -48,23 +48,18 @@ VertexOut VS(VertexIn vin)
 	MaterialData matData = gMaterialData[gMaterialIndex];
 
 #ifdef SKINNED
-	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	weights[0] = vin.BoneWeights.x;
-	weights[1] = vin.BoneWeights.y;
-	weights[2] = vin.BoneWeights.z;
-	weights[3] = vin.BoneWeights.w;
 
-	float3 posL = float3(0.0f, 0.0f, 0.0f);
-	float3 normalL = float3(0.0f, 0.0f, 0.0f);
-	float3 tangentL = float3(0.0f, 0.0f, 0.0f);
+	float3 posL = { 0.0f, 0.0f, 0.0f };
+	float3 normalL = { 0.0f, 0.0f, 0.0f };
+	float3 tangentL = { 1.0f, 0.0f, 0.0f };
 	for (int i = 0; i < 4; ++i)
 	{
 		// Assume no nonuniform scaling when transforming normals, so 
 		// that we do not have to use the inverse-transpose.
 
-		posL += weights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]]).xyz;
-		normalL += weights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]);
-		tangentL += weights[i] * mul(vin.TangentL.xyz, (float3x3)gBoneTransforms[vin.BoneIndices[i]]);
+		posL += vin.BoneWeights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]]).xyz;
+		normalL += vin.BoneWeights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]);
+		//tangentL += (vin.BoneWeights[i] * mul(vin.TangentL.xyz, (float3x3)gBoneTransforms[vin.BoneIndices[i]]));
 	}
 
 	vin.PosL = posL;
@@ -103,6 +98,9 @@ float4 PS(VertexOut pin) : SV_Target
 	float  roughness = matData.Roughness;
 	uint diffuseMapIndex = matData.DiffuseMapIndex;
 	uint normalMapIndex = matData.NormalMapIndex;
+#ifdef SKINNED
+	uint specularMapIndex = matData.SpecularMapIndex;
+#endif
 
 	// Dynamically look up the texture in the array.
 	diffuseAlbedo *= gTextureMaps[diffuseMapIndex].Sample(gsamAnisotropicWrap, pin.TexC);
@@ -136,7 +134,6 @@ float4 PS(VertexOut pin) : SV_Target
 	const float shininess = (1.0f - roughness) * normalMapSample.a;
 	Material mat = { diffuseAlbedo, fresnelR0, shininess };
 
-
 	//float3 shadowFactor = 1.0f;
 	float4 directLight = ComputeLighting(gLights, mat, pin.PosW,
 		bumpedNormalW, toEyeW, shadowFactor);
@@ -149,8 +146,27 @@ float4 PS(VertexOut pin) : SV_Target
 	float3 fresnelFactor = SchlickFresnel(fresnelR0, bumpedNormalW, r);
 	litColor.rgb += shininess * fresnelFactor * reflectionColor.rgb;
 
+#ifdef SKINNED
+
+	float3 InvLightDirection = -gLights[0].Direction;
+	float DiffuseFactor = saturate(dot(bumpedNormalW, gLights[0].Direction));
+	if (DiffuseFactor > 0)
+	{
+		float4 specularMapSample = gTextureMaps[specularMapIndex].Sample(gsamAnisotropicWrap, pin.TexC);
+
+		float3 ReflectLightDir = normalize(reflect(gLights[0].Direction, bumpedNormalW));
+		//float3 ReflectLightDir = normalize(2 * DiffuseFactor*BumpNormal - InvLightDirection);
+
+		float SpecularFactor = pow(saturate(dot(gEyePosW - pin.PosW, ReflectLightDir)), 3.0);
+
+		float4 Specular = SpecularFactor * specularMapSample;
+
+		litColor = litColor + Specular;
+	}
+#endif
+
 	// Common convention to take alpha from diffuse albedo.
-	litColor.a = diffuseAlbedo.a;
+	//litColor.a = diffuseAlbedo.a;
 
 	return litColor;
 }

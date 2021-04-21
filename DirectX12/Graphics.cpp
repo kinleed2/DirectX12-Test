@@ -38,7 +38,10 @@ bool Graphics::Initialize()
     mCamera.SetPosition(0.0f, 2.0f, -15.0f);
 
     mShadowMap = std::make_unique<ShadowMap>(
-        md3dDevice.Get(), 2048, 2048);
+        md3dDevice.Get(), 1024, 1024);
+
+    //fbxmesh = std::make_unique<FBXMesh>(fbx,md3dDevice.Get(), mCommandList.Get());
+
 
     LoadContents();
     BuildRootSignature();
@@ -54,7 +57,6 @@ bool Graphics::Initialize()
 
     BuildMaterials();
     BuildRenderItems();
-    BuildBoneRitems();
     BuildSkinnedRenderItems();
     BuildInstanceRenderItems();
     BuildFrameResources();
@@ -133,8 +135,6 @@ void Graphics::Update(const GameTimer& gt)
     //UpdateWaves(gt);
 }
 
-
-
 void Graphics::OnMouseDown(WPARAM btnState, int x, int y)
 {
     mLastMousePos.x = x;
@@ -173,22 +173,107 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
     if (GetAsyncKeyState('D') & 0x8000) mCamera.Strafe(10.0f * dt);
     if (GetAsyncKeyState('A') & 0x8000) mCamera.Strafe(-10.0f * dt);
 
-    if (GetAsyncKeyState('1') & 0x8000)
-    {
-        if (!mFrustumCullingEnabled) std::cout << "************\n Frustum Culling on \n************\n";
-        mFrustumCullingEnabled = true;
+    if (GetAsyncKeyState(VK_UP) & 0x8000) mCamera.Walk(10.0f * dt);
+    if (GetAsyncKeyState(VK_DOWN) & 0x8000) mCamera.Walk(-10.0f * dt);
+    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) mCamera.Strafe(10.0f * dt);
+    if (GetAsyncKeyState(VK_LEFT) & 0x8000) mCamera.Strafe(-10.0f * dt);
 
-    }
-    if (GetAsyncKeyState('2') & 0x8000)
+    if (GetAsyncKeyState('1') & 0x0001)
     {
-        if (mFrustumCullingEnabled) std::cout << "************\n Frustum Culling off \n************\n";
-        mFrustumCullingEnabled = false;
+        if (!mFrustumCullingEnabled)
+        {
+            std::cout << "************\n Frustum Culling on \n************\n";
+            mFrustumCullingEnabled = true;
+        }
+        else
+        {
+            std::cout << "************\n Frustum Culling off \n************\n";
+            mFrustumCullingEnabled = false;
+        }
 
     }
     mCamera.UpdateViewMatrix();
 
+    if (GetAsyncKeyState('2') & 0x0001)
+    {
+        if (sunTurn)
+        {
+            std::cout << "************\n sun rotation off \n************\n";
+            sunTurn = false;
+        }
+        else
+        {
+            std::cout << "************\n sun rotation on \n************\n";
+            sunTurn = true;
+        }
+
+    }
+    
+
+    if (GetAsyncKeyState('3') & 0x0001)
+    {
+        if (debugFlag)
+        {
+            std::cout << "************\n shadow debug off \n************\n";
+            debugFlag = false;
+        }
+        else
+        {
+            std::cout << "************\n shadow debug on \n************\n";
+            debugFlag = true;
+        }
+    }
+    if (GetAsyncKeyState('4') & 0x0001)
+    {
+        if (skull)
+        {
+            std::cout << "************\n skull off \n************\n";
+            skull = false;
+        }
+        else
+        {
+            std::cout << "************\n skull on \n************\n";
+            skull = true;
+        }
+    }
+    if (GetAsyncKeyState('5') & 0x0001)
+    {
+        if (model)
+        {
+            std::cout << "************\n model off \n************\n";
+            model = false;
+        }
+        else
+        {
+            std::cout << "************\n model on \n************\n";
+            model = true;
+        }
+    }
+    if (GetAsyncKeyState('6') & 0x0001)
+    {
+        if (object)
+        {
+            std::cout << "************\n object off \n************\n";
+            object = false;
+        }
+        else
+        {
+            std::cout << "************\n object on \n************\n";
+            object = true;
+        }
+    }
+
+
+
+
     if (GetAsyncKeyState('Q') & 0x8000) mLightRotationAngle -= 1 * dt;
     if (GetAsyncKeyState('E') & 0x8000) mLightRotationAngle += 1 * dt;
+
+    if (sunTurn)
+    {
+        mLightRotationAngle -= 0.1 * dt;
+    }
+
 
     XMMATRIX R = XMMatrixRotationY(mLightRotationAngle);
     for (int i = 0; i < 3; ++i)
@@ -202,6 +287,30 @@ void Graphics::OnKeyboardInput(const GameTimer& gt)
     {
         UpdateSkinnedCBs(gt);
     }
+
+    if (GetAsyncKeyState(VK_SPACE) & 0x0001)
+    {
+        animation_index++;
+        if (animation_index >= animation_name.size())
+        {
+            animation_index = 0;
+        }
+        std::cout << animation_name[animation_index] << std::endl;
+    }
+
+    if (GetAsyncKeyState('J') & 0x0001)
+    {
+        animation_speed += 0.25f;
+        std::cout << animation_speed << std::endl;
+    }
+
+    if (GetAsyncKeyState('K') & 0x0001)
+    {
+        animation_speed -= 0.25f;
+        std::cout << animation_speed << std::endl;
+    }
+    
+
 }
 
 void Graphics::AnimateMaterials(const GameTimer& gt)
@@ -230,6 +339,8 @@ void Graphics::AnimateMaterials(const GameTimer& gt)
 
 void Graphics::UpdateObjectCBs(const GameTimer& gt)
 {
+    
+    float animation_tick = animation_speed * gt.DeltaTime();
     auto currObjectCB = mCurrFrameResource->ObjectCB.get();
     for (auto& e : mAllRitems)
     {
@@ -245,29 +356,9 @@ void Graphics::UpdateObjectCBs(const GameTimer& gt)
             XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
             objConstants.MaterialIndex = e->Mat->MatCBIndex;
 
-            if (e->SkinnedFlag)
-            {
-                if (meshes[e->SkinnedCBIndex].skeletal_animation.size() > 0)
-                {
-                    int frame = meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick / meshes[e->SkinnedCBIndex].skeletal_animation.sampling_time;
-                    if (frame > meshes[e->SkinnedCBIndex].skeletal_animation.size() - 1)
-                    {
-                        frame = 0;
-                        meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick = 0;
-                    }
-                    std::vector<Bone>& skeletal = meshes[e->SkinnedCBIndex].skeletal_animation.at(frame);
-                    size_t number_of_bones = skeletal.size();
-                    _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
-                    for (size_t i = 0; i < number_of_bones; i++)
-                    {
-                        XMStoreFloat4x4(&objConstants.bone_transforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
-                    }
-                    meshes[e->SkinnedCBIndex].skeletal_animation.animation_tick += gt.DeltaTime();
-                }                
-            }
             currObjectCB->CopyData(e->ObjCBIndex, objConstants);
-            // Next FrameResource need to be updated too.
-            //e->NumFramesDirty--;
+            //Next FrameResource need to be updated too.
+            e->NumFramesDirty--;
         }
     }
 }
@@ -291,6 +382,8 @@ void Graphics::UpdateMaterialBuffer(const GameTimer& gt)
             XMStoreFloat4x4(&matData.MatTransform, XMMatrixTranspose(matTransform));
             matData.DiffuseMapIndex = mat->DiffuseSrvHeapIndex;
             matData.NormalMapIndex = mat->NormalSrvHeapIndex;
+            matData.SpecularMapIndex = mat->SpecularSrvHeapIndex;
+
 
             currMaterialBuffer->CopyData(mat->MatCBIndex, matData);
 
@@ -306,9 +399,12 @@ void Graphics::UpdateMainPassCB(const GameTimer& gt)
     XMMATRIX proj = mCamera.GetProj();
 
     XMMATRIX viewProj = XMMatrixMultiply(view, proj);
-    XMMATRIX invView = XMMatrixInverse(&XMMatrixDeterminant(view), view);
-    XMMATRIX invProj = XMMatrixInverse(&XMMatrixDeterminant(proj), proj);
-    XMMATRIX invViewProj = XMMatrixInverse(&XMMatrixDeterminant(viewProj), viewProj);
+    XMVECTOR viewVector = XMMatrixDeterminant(view);
+    XMMATRIX invView = XMMatrixInverse(&viewVector, view);
+    XMVECTOR projVector = XMMatrixDeterminant(proj);
+    XMMATRIX invProj = XMMatrixInverse(&projVector, proj);
+    XMVECTOR viewProjVector = XMMatrixDeterminant(viewProj);
+    XMMATRIX invViewProj = XMMatrixInverse(&viewProjVector, viewProj);
 
     XMMATRIX shadowTransform = XMLoadFloat4x4(&mShadowTransform);
 
@@ -402,7 +498,8 @@ void Graphics::UpdateReflectedPassCB(const GameTimer& gt)
 void Graphics::UpdateInstanceData(const GameTimer& gt)
 {
     XMMATRIX view = mCamera.GetView();
-    XMMATRIX invView = XMMatrixInverse(&XMMatrixDeterminant(view), view);
+    XMVECTOR viewVector = XMMatrixDeterminant(view);
+    XMMATRIX invView = XMMatrixInverse(&viewVector, view);
 
     auto currInstanceBuffer = mCurrFrameResource->InstanceBuffer.get();
     for (auto& e : mAllInstanceRitems)
@@ -415,8 +512,8 @@ void Graphics::UpdateInstanceData(const GameTimer& gt)
         {
             XMMATRIX world = XMLoadFloat4x4(&instanceData[i].World);
             XMMATRIX texTransform = XMLoadFloat4x4(&instanceData[i].TexTransform);
-
-            XMMATRIX invWorld = XMMatrixInverse(&XMMatrixDeterminant(world), world);
+            XMVECTOR worldVector = XMMatrixDeterminant(world);
+            XMMATRIX invWorld = XMMatrixInverse(&worldVector, world);
 
             // View space to the object's local space.
             XMMATRIX viewToLocal = XMMatrixMultiply(invView, invWorld);
@@ -495,9 +592,12 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
     XMMATRIX proj = XMLoadFloat4x4(&mLightProj);
 
     XMMATRIX viewProj = XMMatrixMultiply(view, proj);
-    XMMATRIX invView = XMMatrixInverse(&XMMatrixDeterminant(view), view);
-    XMMATRIX invProj = XMMatrixInverse(&XMMatrixDeterminant(proj), proj);
-    XMMATRIX invViewProj = XMMatrixInverse(&XMMatrixDeterminant(viewProj), viewProj);
+    XMVECTOR viewVector = XMMatrixDeterminant(view);
+    XMMATRIX invView = XMMatrixInverse(&viewVector, view);
+    XMVECTOR projVector = XMMatrixDeterminant(proj);
+    XMMATRIX invProj = XMMatrixInverse(&projVector, proj);
+    XMVECTOR viewProjVector = XMMatrixDeterminant(viewProj);
+    XMMATRIX invViewProj = XMMatrixInverse(&viewProjVector, viewProj);
 
     UINT w = mShadowMap->Width();
     UINT h = mShadowMap->Height();
@@ -520,78 +620,60 @@ void Graphics::UpdateShadowPassCB(const GameTimer& gt)
 
 void Graphics::UpdateSkinnedCBs(const GameTimer& gt)
 {
-    //auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
-    //SkinnedConstants skinnedConstants;
-    //
-    //std::vector<Matrix> boneTransforms;
-    ////// We only have one skinned model being animated.
-    ////mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
-    ////
-   
-    ////std::copy(
-    ////    std::begin(mSkinnedModelInst->FinalTransforms),
-    ////    std::end(mSkinnedModelInst->FinalTransforms),
-    ////    &skinnedConstants.BoneTransforms[0]);
-    ////currSkinnedCB->CopyData(0, skinnedConstants);
+    float animation_tick = animation_speed * gt.DeltaTime();
+    auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+    SkinnedConstants skinnedConstants;
 
-    //int skinnedIndex = 0;
-    //for (auto& mesh : meshes)
-    //{
-    //    for (auto& subset : mesh.subsets)
-    //    {
-    //        if (mesh.skeletal_animation.size() > 0)
-    //        {
-    //            int frame = mesh.skeletal_animation.animation_tick / mesh.skeletal_animation.sampling_time;
-    //            if (frame > mesh.skeletal_animation.size() - 1)
-    //            {
-    //                frame = 0;
-    //                mesh.skeletal_animation.animation_tick = 0;
-    //            }
-    //            std::vector<Bone>& skeletal = mesh.skeletal_animation.at(frame);
-    //            size_t number_of_bones = skeletal.size();
-    //            _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
-    //            for (size_t i = 0; i < number_of_bones; i++)
-    //            {
-    //                boneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
-    //                XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
-    //            }
-    //            mesh.skeletal_animation.animation_tick += gt.DeltaTime();
-    //        }
-    //      
-    //    }
+        if (extra_animations[animation_name[animation_index]].size() > 0)
+        {
+            int frame = extra_animations[animation_name[animation_index]].animation_tick /
+                extra_animations[animation_name[animation_index]].sampling_time;
+            if (frame > extra_animations[animation_name[animation_index]].size() - 1)
+            {
+                frame = 0;
+                extra_animations[animation_name[animation_index]].animation_tick = 0;
+            }
+            std::vector<Bone>& skeletal = extra_animations[animation_name[animation_index]].at(frame);
+            size_t number_of_bones = skeletal.size();
+            _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
+            for (size_t i = 0; i < number_of_bones; i++)
+            {
+                XMStoreFloat4x4(&skinnedConstants.BoneTransforms[i], XMLoadFloat4x4(&skeletal.at(i).transform));
+            }
+            extra_animations[animation_name[animation_index]].animation_tick += animation_tick;
+        }
 
-    //    currSkinnedCB->CopyData(skinnedIndex, skinnedConstants);
-    //    skinnedIndex++;
-    //}
-
-    //int i = 0;
-    //for (auto& boneTransform : boneTransforms)
-    //{
-    //    skinnedConstants.BoneTransforms[i] = boneTransform;
-    //    i++;
-    //}
-    //
-    //currSkinnedCB->CopyData(0, skinnedConstants);
+    currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
 void Graphics::LoadContents()
 {
-
-    //LoadModelData(fbx);
-    //
-    //mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
-    //mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
-    //mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
-    //mSkinnedModelInst->ClipName = "mixamo.com";
-    ////mSkinnedModelInst->ClipName = "seasun animation";
-    //mSkinnedModelInst->TimePos = 0.0f;
-    
-
-
     LoadFBX(fbx);
+    std::vector<std::wstring> motionNames =
+    {
+        L"../Models/armada.fbx",
+        L"../Models/au to role.fbx",
+        L"../Models/bencao.fbx",
+        L"../Models/capoeira (2).fbx",
+        L"../Models/chapa giratoria 2.fbx",
+        L"../Models/chapa-giratoria.fbx",
+        L"../Models/martelo do chau sem mao.fbx",
+        L"../Models/meia lua de compasso.fbx",
+        L"../Models/chapaeu de couro.fbx",
+    };
+
+    for (int i = 0; i < (int)motionNames.size(); ++i)
+    {
+        LoadFBX(motionNames[i]);
+    }
+
 
     std::vector<std::string> texNames =
     {
+        "bricks",
+        "stone",
+        "grass",
+        "ice",
         "bricksDiffuseMap",
         "bricksNormalMap",
         "tileDiffuseMap",
@@ -603,6 +685,10 @@ void Graphics::LoadContents()
 
     std::vector<std::wstring> texFilenames =
     {
+        L"../Textures/bricks.dds",
+        L"../Textures/stone.dds",
+        L"../Textures/grass.dds",
+        L"../Textures/ice.dds",
         L"../Textures/bricks2.dds",
         L"../Textures/bricks2_nmap.dds",
         L"../Textures/tile.dds",
@@ -613,35 +699,41 @@ void Graphics::LoadContents()
         
     };
 
-    for (UINT i = 0; i < mModelMaterials.size(); ++i)
+    int modelTexBegin = texNames.size();
+
+    for (auto& mesh : meshes)
     {
-        std::string diffuseName = mModelMaterials[i].DiffuseMapName;
-
-        if (diffuseName != "")
+        for (auto& subset : mesh.subsets)
         {
-
-            std::wstring diffuseFilename = AnsiToWString(diffuseName);
-
-            // strip off extension
-            diffuseName = diffuseName.substr(0, diffuseName.find_last_of("."));
-
-
-            mModelTextureNames.push_back(diffuseName);
-            texNames.push_back(diffuseName);
-            texFilenames.push_back(diffuseFilename);
-
-
-            if (mModelMaterials[i].NormalMapName != "")
+            if (subset.material.DiffuseMapName != "")
             {
-                std::string normalName = mModelMaterials[i].NormalMapName;
-                std::wstring normalFilename = AnsiToWString(normalName);
-                normalName = normalName.substr(0, normalName.find_last_of("."));
-                mModelTextureNames.push_back(normalName);
-                texNames.push_back(normalName);
-                texFilenames.push_back(normalFilename);
+                std::wstring diffuse = AnsiToWString(subset.material.DiffuseMapName);
+                std::string name = subset.material.DiffuseMapName.substr(subset.material.DiffuseMapName.find_last_of("/\\") + 1,
+                    subset.material.DiffuseMapName.find_last_of("."));
+
+                texFilenames.push_back(L"../Models/" + diffuse);
+                texNames.push_back(name);
+                
+            }
+            if (subset.material.NormalMapName != "")
+            {
+                std::wstring normal = AnsiToWString(subset.material.NormalMapName);
+                std::string name = subset.material.NormalMapName.substr(subset.material.NormalMapName.find_last_of("/\\") + 1,
+                    subset.material.NormalMapName.find_last_of("."));
+
+                texFilenames.push_back(L"../Models/" + normal); 
+                texNames.push_back(name);
+            }
+            if (subset.material.SpecularName != "")
+            {
+                std::wstring specular = AnsiToWString(subset.material.SpecularName);
+                std::string name = subset.material.SpecularName.substr(subset.material.SpecularName.find_last_of("/\\") + 1,
+                    subset.material.SpecularName.find_last_of("."));
+
+                texFilenames.push_back(L"../Models/" + specular);
+                texNames.push_back(name);
             }
         }
-
     }
 
     for (int i = 0; i < (int)texNames.size(); ++i)
@@ -650,10 +742,17 @@ void Graphics::LoadContents()
         if (mTextures.find(texNames[i]) == std::end(mTextures))
         {
             LoadTextures(texFilenames[i], texNames[i]);
+
+            if (i >= modelTexBegin)
+            {
+                mModelTextureNames.push_back(texNames[i]);
+            }
         }
     }
-
-    
+    for (auto i = extra_animations.begin(); i != extra_animations.end(); ++i)
+    {
+        animation_name.push_back(i->second.name);
+    }
 }
 
 void Graphics::LoadTextures(const std::wstring filename, std::string texName)
@@ -665,6 +764,9 @@ void Graphics::LoadTextures(const std::wstring filename, std::string texName)
     tex->Name = texName;
 
     std::unique_ptr<uint8_t[]> texData;
+
+    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
 
     if (filename.rfind(L"dds") != std::wstring::npos)
     {
@@ -682,13 +784,12 @@ void Graphics::LoadTextures(const std::wstring filename, std::string texName)
             static_cast<UINT>(subresources.size()));
 
         // Create the GPU upload buffer.
-        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
 
         auto desc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 
         ThrowIfFailed(
             md3dDevice->CreateCommittedResource(
-                &heapProps,
+                &uploadHeap,
                 D3D12_HEAP_FLAG_NONE,
                 &desc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -736,7 +837,7 @@ void Graphics::LoadTextures(const std::wstring filename, std::string texName)
         
         ThrowIfFailed(
             md3dDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                &defaultHeap,
                 D3D12_HEAP_FLAG_NONE,
                 &desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -757,12 +858,13 @@ void Graphics::LoadTextures(const std::wstring filename, std::string texName)
         
         const UINT64 uploadBufferSize = GetRequiredIntermediateSize(tex->Resource.Get(), 0,
             static_cast<uint32_t>(subresources.size()));
+        desc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 
         ThrowIfFailed(
             md3dDevice->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                &uploadHeap,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+                &desc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(tex->UploadHeap.GetAddressOf())));
@@ -871,7 +973,7 @@ void Graphics::BuildDescriptorHeaps()
     // Create the SRV heap.
     //
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.NumDescriptors = mTextures.size() + 3;
+    srvHeapDesc.NumDescriptors = mTextures.size() + 3;// shadow map, cube, null tex
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -883,12 +985,18 @@ void Graphics::BuildDescriptorHeaps()
 
     std::vector<ComPtr<ID3D12Resource>> tex2DList =
     {
+        
+
         mTextures["bricksDiffuseMap"]->Resource,
         mTextures["bricksNormalMap"]->Resource,
         mTextures["tileDiffuseMap"]->Resource,
         mTextures["tileNormalMap"]->Resource,
         mTextures["defaultDiffuseMap"]->Resource,
-        mTextures["defaultNormalMap"]->Resource
+        mTextures["defaultNormalMap"]->Resource,
+        mTextures["bricks"]->Resource,
+        mTextures["stone"]->Resource,
+        mTextures["grass"]->Resource,
+        mTextures["ice"]->Resource,
     };
 
     mModelSrvHeapStart = (UINT)tex2DList.size();
@@ -929,7 +1037,6 @@ void Graphics::BuildDescriptorHeaps()
     mSkyTexHeapIndex = (UINT)tex2DList.size();
 
     mShadowMapHeapIndex = mSkyTexHeapIndex + 1;
-
     mNullCubeSrvIndex = mShadowMapHeapIndex + 1;
     mNullTexSrvIndex = mNullCubeSrvIndex + 1;
 
@@ -983,6 +1090,7 @@ void Graphics::BuildShadersAndInputLayout()
 
     mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_1");
     mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_1");
+    mShaders["skinnedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", skinnedDefines, "PS", "ps_5_1");
 
     //mShaders["treeSpriteVS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "VS", "vs_5_1");
     //mShaders["treeSpriteGS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "GS", "gs_5_1");
@@ -996,6 +1104,7 @@ void Graphics::BuildShadersAndInputLayout()
 
     mShaders["shadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "VS", "vs_5_1");
     mShaders["skinnedShadowVS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", skinnedDefines, "VS", "vs_5_1");
+
 
     mShaders["shadowOpaquePS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", nullptr, "PS", "ps_5_1");
     mShaders["shadowAlphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Shadow.hlsl", alphaTestDefines, "PS", "ps_5_1");
@@ -1406,7 +1515,7 @@ void Graphics::BuildSkullGeometry()
 
     if (!fin)
     {
-        MessageBox(0, L"Models/skull.txt not found.", 0, 0);
+        MessageBoxW(0,L"Models/skull.txt not found.", 0, 0);
         return;
     }
 
@@ -1550,6 +1659,12 @@ void Graphics::BuildPSOs()
         reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
         mShaders["skinnedVS"]->GetBufferSize()
     };
+    skinnedOpaquePsoDesc.PS =
+    {
+        reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+        mShaders["skinnedPS"]->GetBufferSize()
+    };
+
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
 
     //
@@ -1646,6 +1761,7 @@ void Graphics::BuildPSOs()
         mShaders["skyPS"]->GetBufferSize()
     };
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&mPSOs["sky"])));
+
 }
 
 void Graphics::BuildFrameResources()
@@ -1694,25 +1810,70 @@ void Graphics::BuildMaterials()
     mirror0->FresnelR0 = XMFLOAT3(0.98f, 0.97f, 0.95f);
     mirror0->Roughness = 0.1f;
 
+    auto bricks1 = std::make_unique<Material>();
+    bricks1->Name = "bricks1";
+    bricks1->MatCBIndex = matCBIndex++;
+    bricks1->DiffuseSrvHeapIndex = 6;
+    bricks1->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    bricks1->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
+    bricks1->Roughness = 0.1f;
+
+    auto stone0 = std::make_unique<Material>();
+    stone0->Name = "stone0";
+    stone0->MatCBIndex = matCBIndex++;
+    stone0->DiffuseSrvHeapIndex = 7;
+    stone0->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    stone0->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+    stone0->Roughness = 0.3f;
+
+    auto grass0 = std::make_unique<Material>();
+    grass0->Name = "grass0";
+    grass0->MatCBIndex = matCBIndex++;
+    grass0->DiffuseSrvHeapIndex = 8;
+    grass0->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    grass0->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+    grass0->Roughness = 0.2f;
+
+    auto ice0 = std::make_unique<Material>();
+    ice0->Name = "ice0";
+    ice0->MatCBIndex = matCBIndex++;
+    ice0->DiffuseSrvHeapIndex = 9;
+    ice0->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    ice0->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
+    ice0->Roughness = 0.0f;
+
     mMaterials["bricks0"] = std::move(bricks0);
     mMaterials["tile0"] = std::move(tile0);
     mMaterials["mirror0"] = std::move(mirror0);
+    mMaterials["bricks1"] = std::move(bricks1);
+    mMaterials["stone0"] = std::move(stone0);
+    mMaterials["grass0"] = std::move(grass0);
+    mMaterials["ice0"] = std::move(ice0);
+
 
     UINT srvHeapIndex = mModelSrvHeapStart;
 
-    for (UINT i = 0; i < mModelMaterials.size(); ++i)
+    for (auto& mesh : meshes)
     {
-        auto mat = std::make_unique<Material>();
-        mat->Name = mModelMaterials[i].Name;
-        mat->MatCBIndex = matCBIndex++;
-        mat->DiffuseSrvHeapIndex = srvHeapIndex++;
-        mat->NormalSrvHeapIndex = srvHeapIndex++;
-        mat->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-        mat->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
-        mat->Roughness = 0.1f;
+        for (auto& subset : mesh.subsets)
+        {
+            if (mMaterials.find(subset.material.Name) != mMaterials.end()) continue;
 
-        mMaterials[mat->Name] = std::move(mat);
+            auto mat = std::make_unique<Material>();
+            mat->Name = subset.material.Name;
+            mat->MatCBIndex = matCBIndex++;
+            mat->DiffuseSrvHeapIndex = srvHeapIndex++;
+            mat->NormalSrvHeapIndex = srvHeapIndex++;
+            mat->SpecularSrvHeapIndex = srvHeapIndex++;
+            mat->DiffuseAlbedo = subset.material.DiffuseAlbedo;
+            mat->FresnelR0 = XMFLOAT3(0.2f, 0.2f, 0.2f);
+            mat->Roughness = 1.0f;
+
+            mMaterials[mat->Name] = std::move(mat);
+
+        }
     }
+
 
     auto sky = std::make_unique<Material>();
     sky->Name = "sky";
@@ -1866,65 +2027,15 @@ void Graphics::BuildRenderItems()
     }
 }
 
-void Graphics::BuildBoneRitems()
-{
-
-    for (auto& mesh : meshes)
-    {
-        for (auto& subset : mesh.subsets)
-        {
-            if (mesh.skeletal_animation.size() > 0)
-            {
-                int frame = mesh.skeletal_animation.animation_tick / mesh.skeletal_animation.sampling_time;
-                if (frame > mesh.skeletal_animation.size() - 1)
-                {
-                    frame = 0;
-                    mesh.skeletal_animation.animation_tick = 0;
-                }
-                std::vector<Bone>& skeletal = mesh.skeletal_animation.at(frame);
-                size_t number_of_bones = skeletal.size();
-                _ASSERT_EXPR(number_of_bones < MAX_BONES, L"'the number_of_bones' exceeds MAX_BONES.");
-                for (size_t i = 0; i < number_of_bones; i++)
-                {
-                    mBoneTransforms.push_back(XMLoadFloat4x4(&skeletal.at(i).transform));
-                }
-            }
-        }
-
-    }
-
-    int objCBIndex = mAllRitems.size();
-
-    for (size_t i = 0; i < mBoneTransforms.size(); i++)
-    {
-        auto boneRitem = std::make_unique<RenderItem>();
-
-        XMStoreFloat4x4(&boneRitem->World, mBoneTransforms[i]);
-
-        boneRitem->TexTransform = MathHelper::Identity4x4();
-        boneRitem->ObjCBIndex = objCBIndex++;
-        boneRitem->Mat = mMaterials["bricks0"].get();
-        boneRitem->Geo = mGeometries["shapeGeo"].get();
-        boneRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-        boneRitem->IndexCount = boneRitem->Geo->DrawArgs["sphere"].IndexCount;
-        boneRitem->StartIndexLocation = boneRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
-        boneRitem->BaseVertexLocation = boneRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-        mRitemLayer[(int)RenderLayer::Bone].push_back(boneRitem.get());
-        mAllRitems.push_back(std::move(boneRitem));
-
-    }
-
-}
-
 void Graphics::BuildSkinnedRenderItems()
 {
     int objCBIndex = mAllRitems.size();
     int skinnedIndex = 0;
 
-    for (size_t i = 0; i < meshes.size(); i++)
+    for (auto& mesh : meshes)
     {
-        for (size_t j = 0; j < meshes[i].subsets.size(); j++)
+        int subsetIndex = 0;
+        for (auto& subset : mesh.subsets)
         {
             auto model = std::make_unique<RenderItem>();
 
@@ -1935,33 +2046,30 @@ void Graphics::BuildSkinnedRenderItems()
             model->World = modelScale * modelOffset;
 
             model->ObjCBIndex = objCBIndex++;
-            if (meshes[i].subsets[j].material.Name != "")
+            if (subset.material.Name != "")
             {
-                model->Mat = mMaterials[meshes[i].subsets[j].material.Name].get();
+                model->Mat = mMaterials[subset.material.Name].get();
             }
             else
             {
                 model->Mat = mMaterials["mirror0"].get();
             }
  
+            model->Geo = mGeometries[mesh.name].get();
+            model->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-            model->Geo = mGeometries[WstringToString(fbx) + std::to_string(i)].get();
-            model->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-
-            model->IndexCount = model->Geo->DrawArgs["submesh" + std::to_string(j)].IndexCount;
-            model->StartIndexLocation = model->Geo->DrawArgs["submesh" + std::to_string(j)].StartIndexLocation;
+            model->IndexCount = model->Geo->DrawArgs[subset.name].IndexCount;
+            model->StartIndexLocation = model->Geo->DrawArgs[subset.name].StartIndexLocation;
             model->BaseVertexLocation = 0;
 
             // All render items for this solider.m3d instance share
             // the same skinned model instance.
-            model->SkinnedCBIndex = skinnedIndex;
+            model->SkinnedCBIndex = 0;
             model->SkinnedFlag = true;
-            //model->SkinnedModelInst = mSkinnedModelInst.get();
 
             mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(model.get());
             mAllRitems.push_back(std::move(model));
         }
-        skinnedIndex++;
     }
 }
 
@@ -1971,7 +2079,7 @@ void Graphics::BuildInstanceRenderItems()
     skullRitem->World = MathHelper::Identity4x4();
     skullRitem->TexTransform = MathHelper::Identity4x4();
     skullRitem->ObjCBIndex = 0;
-    skullRitem->Mat = mMaterials["bricks0"].get();
+    skullRitem->Mat = mMaterials["ice0"].get();
     skullRitem->Geo = mGeometries["skullGeo"].get();
     skullRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
     skullRitem->InstanceCount = 0;
@@ -1982,7 +2090,7 @@ void Graphics::BuildInstanceRenderItems()
 
     // Generate instance data.
     const int n = 5;
-    mInstanceCount = n * n * n * n;
+    mInstanceCount = n * n * n;
     skullRitem->Instances.resize(mInstanceCount);
 
     float width = 200.0f;
@@ -2010,8 +2118,8 @@ void Graphics::BuildInstanceRenderItems()
                     x + j * dx, y + i * dy, z + k * dz, 1.0f);
 
                 XMStoreFloat4x4(&skullRitem->Instances[index].TexTransform, XMMatrixScaling(2.0f, 2.0f, 1.0f));
-                skullRitem->Instances[index].MaterialIndex = index % (mMaterials.size() - mModelMaterials.size());
-                //skullRitem->Instances[index].MaterialIndex = 0;
+                //skullRitem->Instances[index].MaterialIndex = index % (mMaterials.size() - mModelMaterials.size());
+                skullRitem->Instances[index].MaterialIndex = (rand() % 4) + 3;
 
             }
         }
@@ -2035,9 +2143,10 @@ void Graphics::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
     for(size_t i = 0; i < ritems.size(); ++i)
     {
         auto ri = ritems[i];
-
-        cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-        cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+        auto vertexBufferView = ri->Geo->VertexBufferView();
+        auto indexBufferView = ri->Geo->IndexBufferView();
+        cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        cmdList->IASetIndexBuffer(&indexBufferView);
         cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
         D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex*objCBByteSize;
@@ -2065,8 +2174,10 @@ void Graphics::DrawInstanceRenderItems(ID3D12GraphicsCommandList* cmdList, const
     {
         auto ri = ritems[i];
 
-        cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-        cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+        auto vertexBufferView = ri->Geo->VertexBufferView();
+        auto indexBufferView = ri->Geo->IndexBufferView();
+        cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        cmdList->IASetIndexBuffer(&indexBufferView);
         cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
         // Set the instance buffer to use for this render-item.  For structured buffers, we can bypass 
@@ -2081,12 +2192,15 @@ void Graphics::DrawInstanceRenderItems(ID3D12GraphicsCommandList* cmdList, const
 
 void Graphics::DrawSceneToShadowMap()
 {
-    mCommandList->RSSetViewports(1, &mShadowMap->Viewport());
-    mCommandList->RSSetScissorRects(1, &mShadowMap->ScissorRect());
+    auto viewport = mShadowMap->Viewport();
+    auto scissorRect = mShadowMap->ScissorRect();
+    mCommandList->RSSetViewports(1, &viewport);
+    mCommandList->RSSetScissorRects(1, &scissorRect);
 
     // Change to DEPTH_WRITE.
-    mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
-        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    mCommandList->ResourceBarrier(1, &barrier);
 
     UINT passCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(PassConstants));
 
@@ -2097,7 +2211,8 @@ void Graphics::DrawSceneToShadowMap()
     // Set null render target because we are only going to draw to
     // depth buffer.  Setting a null render target will disable color writes.
     // Note the active PSO also must specify a render target count of 0.
-    mCommandList->OMSetRenderTargets(0, nullptr, false, &mShadowMap->Dsv());
+    auto shadowMapDsv = mShadowMap->Dsv();
+    mCommandList->OMSetRenderTargets(0, nullptr, false, &shadowMapDsv);
 
     // Bind the pass constant buffer for the shadow map pass.
     auto passCB = mCurrFrameResource->PassCB->Resource();
@@ -2111,8 +2226,9 @@ void Graphics::DrawSceneToShadowMap()
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
 
     // Change back to GENERIC_READ so we can read the texture in a shader.
-    mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
-        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_GENERIC_READ));
+    barrier = CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_GENERIC_READ);
+    mCommandList->ResourceBarrier(1, &barrier);
 }
 
 void Graphics::Draw(const GameTimer& gt)
@@ -2151,15 +2267,18 @@ void Graphics::Draw(const GameTimer& gt)
     mCommandList->RSSetScissorRects(1, &mScissorRect);
 
     // Indicate a state transition on the resource usage.
-    mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+        D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    mCommandList->ResourceBarrier(1, &barrier);
 
     // Clear the back buffer and depth buffer.
     mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
     mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
     // Specify the buffers we are going to render to.
-    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+    auto currentBackBufferView = CurrentBackBufferView();
+    auto depthStencilView = DepthStencilView();
+    mCommandList->OMSetRenderTargets(1, &currentBackBufferView, true, &depthStencilView);
 
     auto passCB = mCurrFrameResource->PassCB->Resource();
     mCommandList->SetGraphicsRootConstantBufferView(3, passCB->GetGPUVirtualAddress());
@@ -2172,25 +2291,37 @@ void Graphics::Draw(const GameTimer& gt)
     skyTexDescriptor.Offset(mSkyTexHeapIndex, mCbvSrvUavDescriptorSize);
     mCommandList->SetGraphicsRootDescriptorTable(5, skyTexDescriptor);
 
-    mCommandList->SetPipelineState(mPSOs["opaque"].Get());
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
-    //DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Bone]);
+    if (object)
+    {
+        mCommandList->SetPipelineState(mPSOs["opaque"].Get());
+        DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+    }
 
-    mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
 
-    mCommandList->SetPipelineState(mPSOs["debug"].Get());
-    DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
+    if (model)
+    {
+        mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+        DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::SkinnedOpaque]);
+    }
 
-    mCommandList->SetPipelineState(mPSOs["instance"].Get());
-    DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
+    if (debugFlag)
+    {
+        mCommandList->SetPipelineState(mPSOs["debug"].Get());
+        DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);
+    }
 
+    if (skull)
+    {
+        mCommandList->SetPipelineState(mPSOs["instance"].Get());
+        DrawInstanceRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::InstanceOpaque]);
+    }
     mCommandList->SetPipelineState(mPSOs["sky"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Sky]);
 
     // Indicate a state transition on the resource usage.
-    mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    barrier = CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    mCommandList->ResourceBarrier(1, &barrier);
 
     // Done recording commands.
     ThrowIfFailed(mCommandList->Close());
@@ -2302,477 +2433,6 @@ XMFLOAT3 Graphics::GetHillsNormal(float x, float z)const
     return n;
 }
 
-void Graphics::LoadModelData(const std::wstring filename)
-{
-    const unsigned int ImportFlags =
-        aiProcess_CalcTangentSpace |
-        aiProcess_Triangulate |
-        aiProcess_SortByPType |
-        //aiProcess_PreTransformVertices |
-        aiProcess_GenNormals |
-        aiProcess_GenUVCoords |
-        aiProcess_OptimizeMeshes |
-        aiProcess_Debone |
-        aiProcess_ValidateDataStructure;
-
-    Assimp::Importer importer;
-
-    const aiScene* scene = importer.ReadFile(WstringToString(filename), NULL);
-
-    std::unordered_map<std::string, int> boneIndex;
-
-    std::unordered_map<std::string, AnimationClip> animations;
-
-    UINT numBone = 0;
-
-    std::vector<int> boneIndexToParentIndex;
-
-    UINT numAnimationClips = 0;
-
-    if (scene->mNumMaterials > 0)
-    {
-        LoadMaterialTextures(scene);
-    }
-
-
-    Matrix setBoneOffset = XMMatrixIdentity();
-    std::unordered_map<UINT, XMFLOAT4X4> boneOffsets;
-
-    if (scene && scene->HasMeshes())
-    {
-
-
-        UINT maxMeshNum = scene->mNumMeshes;
-
-        if (scene->mNumMeshes > 0)
-        {
-            for (UINT meshNum = 0; meshNum < maxMeshNum; ++meshNum)
-            {
-                std::vector<std::vector<bone_influence>> boneInfluences;
-
-                auto mesh = scene->mMeshes[meshNum];
-
-                if (mesh->HasBones())
-                {
-                    boneInfluences.resize(mesh->mNumVertices);
-
-                    for (size_t j = 0; j < mesh->mNumBones; j++)
-                    {
-                        aiBone* bone = mesh->mBones[j];
-                        UINT BoneIndex = 0;
-
-                        std::cout << bone->mName.C_Str() << std::endl;
-                        if (boneIndex.find(bone->mName.C_Str()) == boneIndex.end())
-                        {
-                            BoneIndex = numBone;
-                            numBone++;                    
-                        }
-                        else 
-                        {
-                            BoneIndex = boneIndex[bone->mName.C_Str()];
-                        }
-
-                        boneIndex[bone->mName.C_Str()] = BoneIndex;
-
-                        Matrix boneOffset;
-                            
-                        std::cout << boneIndex[bone->mName.C_Str()] << std::endl;
-                        
-                        AiMatrixToXMFLOAT4X4(bone->mOffsetMatrix, &boneOffset);
-
-                        boneOffsets[BoneIndex] = boneOffset;
-                        
-                        for (size_t k = 0; k < bone->mNumWeights; k++)
-                        {
-                        
-                            aiVertexWeight vertexWeight = bone->mWeights[k];
-                            std::vector<bone_influence>& boneInfluence = boneInfluences.at(vertexWeight.mVertexId);
-                        
-                            bone_influence influence;
-                        
-                            influence.weight = vertexWeight.mWeight;
-                            influence.index = BoneIndex;
-                        
-                            boneInfluence.push_back(influence);
-                        }
-                    }
-                }
-
-                assert(mesh->HasPositions());
-                assert(mesh->HasNormals());
-
-                std::vector<SkinnedVertex> vertices;
-                std::vector<UINT16> indices;
-
-                vertices.reserve(mesh->mNumVertices);
-
-                for (UINT i = 0; i < vertices.capacity(); ++i)
-                {
-                    SkinnedVertex vertex;
-                    vertex.Pos = XMFLOAT3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
-                    vertex.Normal = XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-
-                    if(mesh->HasTangentsAndBitangents())
-                    {
-                        vertex.TangentU = XMFLOAT3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
-                        //	vertex.Bitangent = XMFLOAT3(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
-                    }
-                    if (mesh->HasTextureCoords(0))
-                    {
-                        vertex.TexC = XMFLOAT2(mesh->mTextureCoords[0][i].x, -(mesh->mTextureCoords[0][i].y));
-                    }
-                    if (mesh->HasBones())
-                    {
-                        std::vector<bone_influence>& boneInfluence = boneInfluences.at(i);
-
-                        for (size_t j = 0; j < boneInfluence.size(); j++)
-                        {
-
-                            if (j < MAX_BONE_INFLUENCES)
-                            {
-                                vertex.BoneWeights[j] = boneInfluence.at(j).weight;
-                                vertex.BoneIndices[j] = boneInfluence.at(j).index;
-                            }
-                        }
-                    }
-
-                    vertices.push_back(vertex);
-                }
-
-                indices.reserve(mesh->mNumFaces * 3);
-
-                for (UINT i = 0; i < mesh->mNumFaces; ++i)
-                {
-                    aiFace face = mesh->mFaces[i];
-                    for (UINT j = 0; j < face.mNumIndices; ++j)
-                    {
-                        indices.push_back(face.mIndices[j]);
-                    }
-
-                }
-                    
-                auto geo = std::make_unique<MeshGeometry>();
-                geo->Name = WstringToString(filename) + std::to_string(meshNum);
-
-                SubmeshGeometry submesh;
-                submesh.IndexCount = (UINT)indices.size();
-                submesh.StartIndexLocation = 0;
-                submesh.BaseVertexLocation = 0;
-                submesh.Bounds = BoundingBox();
-
-                geo->DrawArgs["submesh"] = submesh;
-
-                const UINT vbByteSize = (UINT)vertices.size() * sizeof(SkinnedVertex);
-                const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-
-                ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-                CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
-
-                ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-                CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-                geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-                    mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-
-                geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-                    mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-                geo->VertexByteStride = sizeof(SkinnedVertex);
-                geo->VertexBufferByteSize = vbByteSize;
-                geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-                geo->IndexBufferByteSize = ibByteSize;
-
-                mGeometries[geo->Name] = std::move(geo);
-
-            }
-        }
-
-        if (scene->HasAnimations())
-        {
-            numAnimationClips = scene->mNumAnimations;
-
-            for (size_t i = 0; i < scene->mNumAnimations; i++)
-            {
-                aiAnimation* animation = scene->mAnimations[i];
-
-                std::vector<BoneAnimation> mBoneAnimation;
-
-                boneIndexToParentIndex.resize(boneIndex.size());
-
-                for (size_t j = 0; j < animation->mNumChannels; j++)
-                {
-                    aiNodeAnim* nodeAnim = animation->mChannels[j];
-
-                    aiNode* node = scene->mRootNode->FindNode(nodeAnim->mNodeName);
-
-                    std::cout << node->mName.C_Str() << std::endl;
-
-                    aiNode* parentNode = node->mParent;
-
-                    std::string nodeName = node->mName.C_Str();
-                    std::string parentName = parentNode->mName.C_Str();
-
-
-                    if(nodeName.find("$")!= std::string::npos)  nodeName.erase(nodeName.find("_"));
-                    if(parentName.find("$") != std::string::npos)  parentName.erase(parentName.find("_"));
-
-                    if (boneIndex.find(parentName) == boneIndex.end())
-                    {
-                        boneIndexToParentIndex[boneIndex[nodeName]] = (boneIndex[nodeName]);
-                    }   
-                    else
-                    {
-                        boneIndexToParentIndex[boneIndex[nodeName]] = (boneIndex[parentName]);
-                    }
-
-                    BoneAnimation boneAnimation;
-
-                    for (size_t k = 0; k < nodeAnim->mNumPositionKeys; k++)
-                    {
-                        Keyframe keyframe;
-
-                        keyframe.TimePos = nodeAnim->mPositionKeys[k].mTime;
-
-                        aiVector3D pos = nodeAnim->mPositionKeys[k].mValue;
-
-                        keyframe.Translation = XMFLOAT3(
-                            nodeAnim->mPositionKeys[k].mValue.x,
-                            nodeAnim->mPositionKeys[k].mValue.y,
-                            nodeAnim->mPositionKeys[k].mValue.z);
-
-                        keyframe.RotationQuat = XMFLOAT4(
-                            nodeAnim->mRotationKeys[k].mValue.x,
-                            nodeAnim->mRotationKeys[k].mValue.y,
-                            nodeAnim->mRotationKeys[k].mValue.z,
-                            nodeAnim->mRotationKeys[k].mValue.w);
-
-                        keyframe.Scale = XMFLOAT3(
-                            nodeAnim->mScalingKeys[k].mValue.x,
-                            nodeAnim->mScalingKeys[k].mValue.y,
-                            nodeAnim->mScalingKeys[k].mValue.z);
-
-                        boneAnimation.Keyframes.push_back(keyframe);
-
-                    }
-
-                    mBoneAnimation.push_back(boneAnimation);
-                }
-
-                animations[animation->mName.C_Str()].BoneAnimations = mBoneAnimation;
-            }
-
-        }
-    }
-    
-    std::vector<XMFLOAT4X4> _boneOffsets;
-    for (size_t i = 0; i < boneOffsets.size(); i++)
-    {
-        _boneOffsets.push_back(boneOffsets[i]);
-    }
-
-    Matrix globalInverseTransform;
-    AiMatrixToXMFLOAT4X4(scene->mRootNode->mTransformation, &globalInverseTransform);
-    mSkinnedInfo.Set(boneIndexToParentIndex, _boneOffsets, animations, globalInverseTransform);
-}
-
-//bool Graphics::LoadModel(const std::wstring filename)
-//{
-//    const unsigned int ImportFlags =
-//        aiProcess_CalcTangentSpace |
-//        aiProcess_Triangulate |
-//        aiProcess_SortByPType |
-//        aiProcess_PreTransformVertices |
-//        aiProcess_GenNormals |
-//        aiProcess_GenUVCoords |
-//        aiProcess_OptimizeMeshes |
-//        aiProcess_Debone |
-//        aiProcess_ValidateDataStructure;
-//
-//    Assimp::Importer importer;
-//
-//    const aiScene* scene = importer.ReadFile(WstringToString(filename), ImportFlags);
-//
-//    if(scene == nullptr)
-//        return false;
-//
-//    processNode(scene->mRootNode, scene);
-//    LoadMaterialTextures(scene);
-//
-//    return true;
-//}
-//
-//void Graphics::processNode(aiNode* node, const aiScene* scene) 
-//{
-//    if (node->mNumMeshes > 0)
-//    {
-//        std::vector<Vertex> vertices;
-//        std::vector<std::uint16_t> indices;
-//
-//        auto geo = std::make_unique<MeshGeometry>();
-//        
-//
-//        // Deal with piece of submesh
-//        for (size_t i = 0; i < node->mNumMeshes; i++)
-//        {
-//            aiMesh* mesh = scene->mMeshes[i];
-//            
-//            SubmeshGeometry submesh;
-//            submesh.BaseVertexLocation = vertices.size();
-//            submesh.StartIndexLocation = indices.size();
-//
-//            processMesh(mesh, scene, vertices, indices);
-//
-//            submesh.IndexCount = indices.size() - submesh.StartIndexLocation;
-//
-//            geo->DrawArgs["submesh"] = std::move(submesh);
-//
-//        }
-// 
-//        const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
-//        const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-//
-//        ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-//        CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
-//
-//        ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-//        CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-//
-//        geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-//            mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-//
-//        geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-//            mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-//
-//        geo->VertexByteStride = sizeof(Vertex);
-//        geo->VertexBufferByteSize = vbByteSize;
-//        geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-//        geo->IndexBufferByteSize = ibByteSize;
-//
-//        mGeometries[geo->Name] = std::move(geo);
-//    }
-//
-//    for (UINT i = 0; i < node->mNumChildren; i++) 
-//    {
-//        this->processNode(node->mChildren[i], scene);
-//    }
-//}
-//
-//void Graphics::processMesh(aiMesh* mesh, const aiScene* scene,
-//    std::vector<Vertex>& vertices, std::vector<std::uint16_t>& indices)
-//{
-//    // Walk through each of the mesh's vertices
-//    vertices.reserve(vertices.size() + mesh->mNumVertices);
-//    for (unsigned int i = 0; i < mesh->mNumVertices; i++)
-//    {
-//        Vertex vertex;
-//        vertex.Pos.x = mesh->mVertices[i].x;
-//        vertex.Pos.y = mesh->mVertices[i].y;
-//        vertex.Pos.z = mesh->mVertices[i].z;
-//
-//        vertex.Normal.x = mesh->mNormals[i].x;
-//        vertex.Normal.y = mesh->mNormals[i].y;
-//        vertex.Normal.z = mesh->mNormals[i].z;
-//
-//        if (mesh->mTextureCoords[0]) // does the mesh contain texture coordinates?
-//        {
-//            // a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
-//            // use models where a vertex can have multiple texture coordinates so we always take the first set (0).
-//            vertex.TexC.x = mesh->mTextureCoords[0][i].x;
-//            vertex.TexC.y = mesh->mTextureCoords[0][i].y;
-//        }
-//        else vertex.TexC = { 0.f, 0.f };
-//
-//        // Tangent
-//        vertex.TangentU.x = mesh->mTangents[i].x;
-//        vertex.TangentU.y = mesh->mTangents[i].y;
-//        vertex.TangentU.z = mesh->mTangents[i].z;
-//        // Bit tangent
-//        //...
-//        vertices.push_back(vertex);
-//    }
-//
-//    indices.reserve(indices.size() + mesh->mNumFaces * 3);
-//    for (UINT i = 0; i < mesh->mNumFaces; i++)
-//    {
-//        aiFace face = mesh->mFaces[i];
-//        // retrieve all indices of the face and store them in the indices vector
-//        for (UINT j = 0; j < face.mNumIndices; j++)
-//            indices.push_back(face.mIndices[j]);
-//    }
-//
-//}
-
-
-void Graphics::LoadMaterialTextures(const aiScene* scene)
-{
-    UINT maxNumMaterials = scene->mNumMaterials;
-    for (size_t i = 0; i < maxNumMaterials; i++)
-    {
-        ModelMaterial modelMat;
-
-        // load diffuse texture
-        aiReturn hasTex;
-        aiMaterial* mat = scene->mMaterials[i];
-        aiString matName = mat->GetName();
-        modelMat.Name = matName.C_Str();
-
-        aiString diffuseTextPath;
-        hasTex = mat->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseTextPath);
-        if (hasTex == aiReturn_SUCCESS)
-        {
-           std::string texName = diffuseTextPath.C_Str();
-           UINT textPos = texName.find_last_of("/\\");
-           std::string _texFilename;
-
-           for (UINT i = textPos + 1; i < texName.size(); i++)
-           {
-               _texFilename.push_back(texName[i]);
-           }
-           _texFilename = "../Textures/" + _texFilename;
-           modelMat.DiffuseMapName = _texFilename;
-        }
-       
-        // load normal texture
-       aiString normalTextPath;
-       hasTex = mat->GetTexture(aiTextureType_NORMALS, 0, &normalTextPath);
-       if (hasTex == aiReturn_SUCCESS)
-       {
-           std::string texName = normalTextPath.C_Str();
-           UINT textPos = texName.find_last_of("/\\");
-           std::string _texFilename;
-
-           for (UINT i = textPos + 1; i < texName.size(); i++)
-           {
-               _texFilename.push_back(texName[i]);
-           }
-           _texFilename = "../Textures/" + _texFilename;
-           modelMat.NormalMapName = _texFilename;
-       }
-        
-       mModelMaterials.push_back(modelMat);
-    }
-}
-
-void Graphics::AiMatrixToXMFLOAT4X4(const aiMatrix4x4& aiMatrix, XMFLOAT4X4* matrix)
-{
-    matrix->m[0][0] = aiMatrix.a1;
-    matrix->m[0][1] = aiMatrix.a2;
-    matrix->m[0][2] = aiMatrix.a3;
-    matrix->m[0][3] = aiMatrix.a4;
-    matrix->m[1][0] = aiMatrix.b1;
-    matrix->m[1][1] = aiMatrix.b2;
-    matrix->m[1][2] = aiMatrix.b3;
-    matrix->m[1][3] = aiMatrix.b4;
-    matrix->m[2][0] = aiMatrix.c1;
-    matrix->m[2][1] = aiMatrix.c2;
-    matrix->m[2][2] = aiMatrix.c3;
-    matrix->m[2][3] = aiMatrix.c4;
-    matrix->m[3][0] = aiMatrix.d1;
-    matrix->m[3][1] = aiMatrix.d2;
-    matrix->m[3][2] = aiMatrix.d3;
-    matrix->m[3][3] = aiMatrix.d4;
-}
-
 void Graphics::Fetch_bone_influences(const FbxMesh* fbx_mesh, std::vector<bone_influences_per_control_point>& influences)
 {
     const int number_of_control_points = fbx_mesh->GetControlPointsCount();
@@ -2804,7 +2464,7 @@ void Graphics::Fetch_bone_influences(const FbxMesh* fbx_mesh, std::vector<bone_i
     }
 }
 
-void Graphics::Fetch_bone_matrices(const FbxMesh* fbx_mesh, std::vector<Bone>& skeletal, FbxTime time)
+void Graphics::Fetch_bone_matrices(const FbxMesh* fbx_mesh)
 {
     const int number_of_deformers = fbx_mesh->GetDeformerCount(FbxDeformer::eSkin);
     for (int index_of_deformer = 0; index_of_deformer < number_of_deformers; ++index_of_deformer)
@@ -2812,91 +2472,24 @@ void Graphics::Fetch_bone_matrices(const FbxMesh* fbx_mesh, std::vector<Bone>& s
         FbxSkin* skin = static_cast<FbxSkin*>(fbx_mesh->GetDeformer(index_of_deformer, FbxDeformer::eSkin));
 
         const int number_of_cluster = skin->GetClusterCount();
-        skeletal.resize(number_of_cluster);
 
         for (int index_of_cluster = 0; index_of_cluster < number_of_cluster; ++index_of_cluster)
         {
-            Bone& bone = skeletal.at(index_of_cluster);
 
             FbxCluster* cluster = skin->GetCluster(index_of_cluster);
 
             // this matrix trnasforms coordinates of the initial pose from mesh space to global space
             FbxAMatrix reference_global_init_position;
             cluster->GetTransformMatrix(reference_global_init_position);
+            mReference_global_init_position[index_of_cluster] = reference_global_init_position;
 
-            // this matrix trnasforms coordinates of the initial pose from bone space to global space
+            // this matrix trnasforms coordinates of the initial pose from bone_node space to global space
             FbxAMatrix cluster_global_init_position;
             cluster->GetTransformLinkMatrix(cluster_global_init_position);
-
-            // this matrix trnasforms coordinates of the current pose from bone space to global space
-            FbxAMatrix cluster_global_current_position;
-            cluster_global_current_position = cluster->GetLink()->EvaluateGlobalTransform(time);
-
-            // this matrix trnasforms coordinates of the current pose from mesh space to global space
-            FbxAMatrix reference_global_current_position;
-            reference_global_current_position = fbx_mesh->GetNode()->EvaluateGlobalTransform(time);
-
-            // Matrices are defined using the Column Major scheme. When a FbxAMatrix represents a transformation
-            // (translation, rotation and scale), the last row of the matrix represents the translation part of the
-            // transformation.
-            FbxAMatrix transform = reference_global_current_position.Inverse() * cluster_global_current_position
-                * cluster_global_init_position.Inverse() * reference_global_init_position;
-
-            // convert FbxAMatrix(transform) to XMDLOAT4X4(bone.transform)
-            for (int i = 0; i < 4; ++i)
-            {
-                for (int j = 0; j < 4; ++j)
-                {
-                    bone.transform.m[i][j] = transform[i][j];
-                }
-            }
-
+            mCluster_global_init_position[index_of_cluster] = cluster_global_init_position;
 
         }
 
-    }
-}
-
-void Graphics::Fetch_animations(FbxMesh* fbx_mesh, Skeletal_animation& skeletal_animation, u_int sampling_rate)
-{
-    // Get the list of all the animation stack.
-    FbxArray<FbxString*> array_of_animation_stack_names;
-    fbx_mesh->GetScene()->FillAnimStackNameArray(array_of_animation_stack_names);
-
-    // Get the number of animations.
-    int number_of_animations = array_of_animation_stack_names.Size();
-    if (number_of_animations > 0)
-    {
-        // Get the FbxTime per animation's frame.
-        FbxTime::EMode time_mode = fbx_mesh->GetScene()->GetGlobalSettings().GetTimeMode();
-        FbxTime frame_time;
-        frame_time.SetTime(0, 0, 0, 1, 0, time_mode);
-        sampling_rate = sampling_rate > 0 ? sampling_rate : frame_time.GetFrameRate(time_mode);
-        float sampling_time = 1.0f / sampling_rate;
-        skeletal_animation.sampling_time = sampling_time;
-        skeletal_animation.animation_tick = 0.0f;
-        FbxString* animation_stack_name = array_of_animation_stack_names.GetAt(0);
-        skeletal_animation.name = *animation_stack_name;
-        FbxAnimStack* current_animation_stack
-            = fbx_mesh->GetScene()->FindMember<FbxAnimStack>(animation_stack_name->Buffer());
-        fbx_mesh->GetScene()->SetCurrentAnimationStack(current_animation_stack);
-        FbxTakeInfo* take_info = fbx_mesh->GetScene()->GetTakeInfo(animation_stack_name->Buffer());
-        FbxTime start_time = take_info->mLocalTimeSpan.GetStart();
-        FbxTime end_time = take_info->mLocalTimeSpan.GetStop();
-        FbxTime sampling_step;
-        sampling_step.SetTime(0, 0, 1, 0, 0, time_mode);
-        sampling_step = static_cast<FbxLongLong>(sampling_step.Get() * sampling_time);
-        for (FbxTime current_time = start_time; current_time < end_time; current_time += sampling_step)
-        {
-            Skeletal skeletal;
-            Fetch_bone_matrices(fbx_mesh, skeletal, current_time);
-            skeletal_animation.push_back(skeletal);
-        }
-
-    }
-    for (int i = 0; i < number_of_animations; i++)
-    {
-        delete array_of_animation_stack_names[i];
     }
 }
 
@@ -2910,280 +2503,372 @@ void Graphics::LoadFBX(const std::wstring filename)
 
     FbxImporter* importer = FbxImporter::Create(manager, "");
 
-    bool import_status = false;
+    bool importStatus = false;
 
-    import_status = importer->Initialize(_filename.c_str(), -1, manager->GetIOSettings());
-    _ASSERT_EXPR(import_status, importer->GetStatus().GetErrorString());
+    importStatus = importer->Initialize(_filename.c_str(), -1, manager->GetIOSettings());
+    _ASSERT_EXPR(importStatus, importer->GetStatus().GetErrorString());
 
     FbxScene* scene = FbxScene::Create(manager, "");
 
-    import_status = importer->Import(scene);
-    _ASSERT_EXPR(import_status, importer->GetStatus().GetErrorString());
+    importStatus = importer->Import(scene);
+    _ASSERT_EXPR(importStatus, importer->GetStatus().GetErrorString());
 
-    fbxsdk::FbxGeometryConverter gemoetry_converter(manager);
-    gemoetry_converter.Triangulate(scene, /*replace*/true);
+    fbxsdk::FbxGeometryConverter gemoetryConverter(manager);
+    gemoetryConverter.Triangulate(scene, /*replace*/true);
 
-    //FbxAxisSystem OurAxisSystem(FbxAxisSystem::eDirectX);
-    //FbxAxisSystem SceneAxisSystem = scene->GetGlobalSettings().GetAxisSystem();
-    //if (SceneAxisSystem != OurAxisSystem)
-    //{
-    //    OurAxisSystem.ConvertScene(scene);
-    //}
-
-    std::vector <FbxNode*> fetched_meshes;
+    std::vector <FbxNode*> fetchedMeshes;
+    std::vector <FbxNode*> boneNodes;
     std::function<void(FbxNode*)> traverse = [&](FbxNode* node)
     {
         if (node)
         {
             FbxNodeAttribute* fbx_node_attribute = node->GetNodeAttribute();
+            
             if (fbx_node_attribute)
             {
                 switch (fbx_node_attribute->GetAttributeType())
                 {
                 case FbxNodeAttribute::eMesh:
-                    fetched_meshes.push_back(node);
+                    fetchedMeshes.push_back(node);
+                    break;
+                case FbxNodeAttribute::eSkeleton:
+                    boneNodes.push_back(node);
+
                     break;
                 }
             }
+          
             for (int i = 0; i < node->GetChildCount(); i++)
             {
                 traverse(node->GetChild(i));
             }
         }
+      
     };
     traverse(scene->GetRootNode());
 
-    //FbxMesh* fbx_mesh = fetched_meshes.at(0)->GetMesh();
-    meshes.resize(fetched_meshes.size());
-    for (int i = 0; i < fetched_meshes.size(); i++)
+    if (fetchedMeshes.size() > 0)
     {
-        FbxMesh* fbx_mesh = fetched_meshes.at(i)->GetMesh();
-        Mesh& mesh = meshes.at(i);
-        const int number_of_materials = fbx_mesh->GetNode()->GetMaterialCount();
-        mesh.subsets.resize(number_of_materials);//UNIT18
-
-        //UNIT20
-        std::vector<bone_influences_per_control_point> bone_influences;
-        Fetch_bone_influences(fbx_mesh, bone_influences);
-
-        //UNIT22 BONE TRANSFORM
-        FbxTime::EMode time_mode = fbx_mesh->GetScene()->GetGlobalSettings().GetTimeMode();
-        FbxTime frame_time;
-        frame_time.SetTime(0, 0, 0, 1, 0, time_mode);
-
-        //Fetch_bone_matrices(fbx_mesh, mesh.skeletal, frame_time * 20);//pose at frame 20
-
-        //UNIT23 BONE ANIMATION
-        Fetch_animations(fbx_mesh, mesh.skeletal_animation);
-
-        FbxAMatrix global_transform = fbx_mesh->GetNode()->EvaluateGlobalTransform(0);
-
-
-
-        for (int row = 0; row < 4; row++)
+        meshes.resize(fetchedMeshes.size());
+        for (int i = 0; i < fetchedMeshes.size(); i++)
         {
-            for (int column = 0; column < 4; column++)
-            {
-                mesh.global_transform.m[row][column] = static_cast<float>(global_transform[row][column]);
-            }
-        }
+            FbxMesh* fbxMesh = fetchedMeshes.at(i)->GetMesh();
+            Mesh& mesh = meshes.at(i);
+            const int numberOfMaterials = fbxMesh->GetNode()->GetMaterialCount();
+            mesh.subsets.resize(numberOfMaterials);//UNIT18
 
-        for (int index_of_material = 0; index_of_material < number_of_materials; index_of_material++)
-        {
-            const FbxSurfaceMaterial* surface_material = fbx_mesh->GetNode()->GetMaterial(index_of_material);
+            mesh.name = fbxMesh->GetName();
 
-            const FbxProperty property = surface_material->FindProperty(FbxSurfaceMaterial::sDiffuse);
-            const FbxProperty factor = surface_material->FindProperty(FbxSurfaceMaterial::sDiffuseFactor);
+            //load bone_node influence per mesh
+            std::vector<bone_influences_per_control_point> bone_influences;
+            Fetch_bone_influences(fbxMesh, bone_influences);
 
-            Subset& subset = mesh.subsets.at(index_of_material);
-
-            if (property.IsValid() && factor.IsValid())
-            {
-                FbxDouble3 color = property.Get<FbxDouble3>();
-                double f = factor.Get<FbxDouble>();
-                subset.material.DiffuseAlbedo.x = static_cast<float>(color[0] * f);
-                subset.material.DiffuseAlbedo.y = static_cast<float>(color[1] * f);
-                subset.material.DiffuseAlbedo.z = static_cast<float>(color[2] * f);
-                subset.material.DiffuseAlbedo.w = 1.0f;
-            }
-
-            if (property.IsValid())
-            {
-                const int number_of_textures = property.GetSrcObjectCount<FbxFileTexture>();
-                if (number_of_textures)
-                {
-                    const FbxFileTexture* file_texture = property.GetSrcObject<FbxFileTexture>();
-                    if (file_texture)
-                    {
-                        const std::string file_name = file_texture->GetRelativeFileName();
-
-                        const std::wstring _file_name = AnsiToWString(file_name);
-                        
-                        //TODO: load tex
-
-
-                    }
-                }
-            }
-        }
-        // Count the polygon count of each material
-        if (number_of_materials > 0)
-        {
-            // Count the faces of each material
-            const int number_of_polygons = fbx_mesh->GetPolygonCount();
-            for (int index_of_polygon = 0; index_of_polygon < number_of_polygons; ++index_of_polygon)
-            {
-                const u_int material_index = fbx_mesh->GetElementMaterial()->GetIndexArray().GetAt(index_of_polygon);
-                mesh.subsets.at(material_index).index_count += 3;
-            }
-            // Record the offset (how many vertex)
-            int offset = 0;
-            for (Subset& subset : mesh.subsets)
-            {
-                subset.index_start = offset;
-                offset += subset.index_count;
-                // This will be used as counter in the following procedures, reset to zero
-                subset.index_count = 0;
-            }
-        }
-
-        std::vector<SkinnedVertex> vertices;
-        std::vector<uint16_t> indices;
-        u_int vertex_count = 0;
-
-        //Tangent
-        FbxGeometryElementTangent* element = fbx_mesh->CreateElementTangent();
-        //  保存形式の取得
-        FbxGeometryElement::EMappingMode mapmode = element->GetMappingMode();
-        FbxGeometryElement::EReferenceMode refmode = element->GetReferenceMode();
-
-        const FbxVector4* array_of_control_points = fbx_mesh->GetControlPoints();
-        const int number_of_polygons = fbx_mesh->GetPolygonCount();
-        indices.resize(number_of_polygons * 3); // UNIT.18
-        for (int index_of_polygon = 0; index_of_polygon < number_of_polygons; index_of_polygon++)
-        {
-            // UNIT.18
-            // The material for current face.
-            int index_of_material = 0;
-            if (number_of_materials > 0)
-            {
-                index_of_material = fbx_mesh->GetElementMaterial()->GetIndexArray().GetAt(index_of_polygon);
-            }
-            // Where should I save the vertex attribute index, according to the material
-            Subset& subset = mesh.subsets.at(index_of_material);
-            const int index_offset = subset.index_start + subset.index_count;
-
-            for (int index_of_vertex = 0; index_of_vertex < 3; index_of_vertex++)
-            {
-                SkinnedVertex vertex;
-                const int index_of_control_point = fbx_mesh->GetPolygonVertex(index_of_polygon, index_of_vertex);
-                vertex.Pos.x = static_cast<float>(array_of_control_points[index_of_control_point][0]);
-                vertex.Pos.y = static_cast<float>(array_of_control_points[index_of_control_point][1]);
-                vertex.Pos.z = static_cast<float>(array_of_control_points[index_of_control_point][2]);
-
-                FbxVector4 normal;
-                fbx_mesh->GetPolygonVertexNormal(index_of_polygon, index_of_vertex, normal);
-                vertex.Normal.x = static_cast<float>(normal[0]);
-                vertex.Normal.y = static_cast<float>(normal[1]);
-                vertex.Normal.z = static_cast<float>(normal[2]);
-
-                fbxsdk::FbxStringList uv_names;
-                fbx_mesh->GetUVSetNames(uv_names);
-
-                if (uv_names.GetCount() > 0)
-                {
-                    FbxVector2 uv;
-                    bool unmapped_uv;
-                    fbx_mesh->GetPolygonVertexUV(index_of_polygon, index_of_vertex, uv_names[0], uv, unmapped_uv);
-                    vertex.TexC.x = static_cast<float>(uv[0]);
-                    vertex.TexC.y = 1.0f - static_cast<float>(uv[1]);
-                }
-                //    ポリゴン頂点に対するインデックス参照形式のみ対応
-                if (mapmode == FbxGeometryElement::eByPolygonVertex)
-                {
-                    if (refmode == FbxGeometryElement::eIndexToDirect)
-                    {
-                        FbxLayerElementArrayTemplate<int>* index = &element->GetIndexArray();
-                        // FbxColor取得
-                        FbxVector4 v = element->GetDirectArray().GetAt(index->GetAt(index_of_control_point));
-                        // DWORD型のカラー作成        
-                        vertex.TangentU.x = (float)v[0];
-                        vertex.TangentU.y = (float)v[1];
-                        vertex.TangentU.z = (float)v[2];
-                    }
-                }
-                else
-                {
-                    vertex.TangentU.x = 0;
-                    vertex.TangentU.y = 0;
-                    vertex.TangentU.z = 0;
-                }
+            FbxTime::EMode time_mode = fbxMesh->GetScene()->GetGlobalSettings().GetTimeMode();
+            FbxTime frame_time;
+            frame_time.SetTime(0, 0, 0, 1, 0, time_mode);
             
-                bone_influences_per_control_point influences_per_control_point = bone_influences.at(index_of_control_point);
+            Fetch_bone_matrices(fbxMesh);
 
-                for (size_t bone_index = 0; bone_index < influences_per_control_point.size(); ++bone_index)
+            FbxAMatrix global_transform = fbxMesh->GetNode()->EvaluateGlobalTransform(0);
+
+            for (int row = 0; row < 4; row++)
+            {
+                for (int column = 0; column < 4; column++)
                 {
+                    mesh.global_transform.m[row][column] = static_cast<float>(global_transform[row][column]);
+                }
+            }
 
-                    if (bone_index < MAX_BONE_INFLUENCES)
-                    {
-                        vertex.BoneIndices[bone_index] = influences_per_control_point.at(bone_index).index;
-                        vertex.BoneWeights[bone_index] = influences_per_control_point.at(bone_index).weight;
-                    }
+            for (int index_of_material = 0; index_of_material < numberOfMaterials; index_of_material++)
+            {
+                const FbxSurfaceMaterial* surface_material = fbxMesh->GetNode()->GetMaterial(index_of_material);
+                //load diffuseMap
+                const FbxProperty diffuseMap = surface_material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+                const FbxProperty factor = surface_material->FindProperty(FbxSurfaceMaterial::sDiffuseFactor);
+                Subset& subset = mesh.subsets.at(index_of_material);
+
+                subset.material.Name = surface_material->GetName();
+
+                if (diffuseMap.IsValid() && factor.IsValid())
+                {
+                    FbxDouble3 color = diffuseMap.Get<FbxDouble3>();
+                    double f = factor.Get<FbxDouble>();
+                    subset.material.DiffuseAlbedo.x = static_cast<float>(color[0] * f);
+                    subset.material.DiffuseAlbedo.y = static_cast<float>(color[1] * f);
+                    subset.material.DiffuseAlbedo.z = static_cast<float>(color[2] * f);
+                    subset.material.DiffuseAlbedo.w = 1.0f;
                 }
 
-                vertices.push_back(vertex);
-
-                indices.at(index_offset + index_of_vertex) = static_cast<uint16_t>(vertex_count);
-
-
-                vertex_count += 1;
+                //load normalMap
+                if (diffuseMap.IsValid())
+                {
+                    const int number_of_textures = diffuseMap.GetSrcObjectCount<FbxFileTexture>();
+                    if (number_of_textures)
+                    {
+                        const FbxFileTexture* file_texture = diffuseMap.GetSrcObject<FbxFileTexture>();
+                        if (file_texture)
+                        {
+                            subset.material.DiffuseMapName = file_texture->GetRelativeFileName();
+                        }
+                    }
+                }
+                const FbxProperty normalMap = surface_material->FindProperty(FbxSurfaceMaterial::sNormalMap);
+                if (normalMap.IsValid())
+                {
+                    const int number_of_textures = normalMap.GetSrcObjectCount<FbxFileTexture>();
+                    if (number_of_textures)
+                    {
+                        const FbxFileTexture* file_texture = normalMap.GetSrcObject<FbxFileTexture>();
+                        if (file_texture)
+                        {
+                            subset.material.NormalMapName = file_texture->GetRelativeFileName();
+                        }
+                    }
+                }
+                const FbxProperty specularMap = surface_material->FindProperty(FbxSurfaceMaterial::sSpecular);
+                if (specularMap.IsValid())
+                {
+                    const int number_of_textures = specularMap.GetSrcObjectCount<FbxFileTexture>();
+                    if (number_of_textures)
+                    {
+                        const FbxFileTexture* file_texture = specularMap.GetSrcObject<FbxFileTexture>();
+                        if (file_texture)
+                        {
+                            subset.material.SpecularName = file_texture->GetRelativeFileName();
+                        }
+                    }
+                }
             }
-            subset.index_count += 3;
+            // Count the polygon count of each material
+            if (numberOfMaterials > 0)
+            {
+                // Count the faces of each material
+                const int number_of_polygons = fbxMesh->GetPolygonCount();
+                for (int index_of_polygon = 0; index_of_polygon < number_of_polygons; ++index_of_polygon)
+                {
+                    const u_int material_index = fbxMesh->GetElementMaterial()->GetIndexArray().GetAt(index_of_polygon);
+                    mesh.subsets.at(material_index).index_count += 3;
+                }
+                // Record the offset (how many vertex)
+                int offset = 0;
+                for (Subset& subset : mesh.subsets)
+                {
+                    subset.index_start = offset;
+                    offset += subset.index_count;
+                    // This will be used as counter in the following procedures, reset to zero
+                    subset.index_count = 0;
+                }
+            }
+
+            std::vector<SkinnedVertex> vertices;
+            std::vector<uint16_t> indices;
+            u_int vertex_count = 0;
+
+            //Tangent
+            FbxGeometryElementTangent* element = fbxMesh->CreateElementTangent();
+            //  保存形式の取得
+            FbxGeometryElement::EMappingMode mapmode = element->GetMappingMode();
+            FbxGeometryElement::EReferenceMode refmode = element->GetReferenceMode();
+
+            const FbxVector4* array_of_control_points = fbxMesh->GetControlPoints();
+            const int number_of_polygons = fbxMesh->GetPolygonCount();
+            indices.resize(number_of_polygons * 3);
+            for (int index_of_polygon = 0; index_of_polygon < number_of_polygons; index_of_polygon++)
+            {
+
+                // The material for current face.
+                int index_of_material = 0;
+                if (numberOfMaterials > 0)
+                {
+                    index_of_material = fbxMesh->GetElementMaterial()->GetIndexArray().GetAt(index_of_polygon);
+                }
+                // Where should I save the vertex attribute index, according to the material
+                Subset& subset = mesh.subsets.at(index_of_material);
+                const int index_offset = subset.index_start + subset.index_count;
+
+                for (int index_of_vertex = 0; index_of_vertex < 3; index_of_vertex++)
+                {
+                    SkinnedVertex vertex;
+                    const int index_of_control_point = fbxMesh->GetPolygonVertex(index_of_polygon, index_of_vertex);
+                    vertex.Pos.x = static_cast<float>(array_of_control_points[index_of_control_point][0]);
+                    vertex.Pos.y = static_cast<float>(array_of_control_points[index_of_control_point][1]);
+                    vertex.Pos.z = static_cast<float>(array_of_control_points[index_of_control_point][2]);
+
+                    FbxVector4 normal;
+                    fbxMesh->GetPolygonVertexNormal(index_of_polygon, index_of_vertex, normal);
+                    vertex.Normal.x = static_cast<float>(normal[0]);
+                    vertex.Normal.y = static_cast<float>(normal[1]);
+                    vertex.Normal.z = static_cast<float>(normal[2]);
+
+                    fbxsdk::FbxStringList uv_names;
+                    fbxMesh->GetUVSetNames(uv_names);
+
+                    if (uv_names.GetCount() > 0)
+                    {
+                        FbxVector2 uv;
+                        bool unmapped_uv;
+                        fbxMesh->GetPolygonVertexUV(index_of_polygon, index_of_vertex, uv_names[0], uv, unmapped_uv);
+                        vertex.TexC.x = static_cast<float>(uv[0]);
+                        vertex.TexC.y = 1.0f - static_cast<float>(uv[1]);
+                    }
+                    //    ポリゴン頂点に対するインデックス参照形式のみ対応
+                    if (mapmode == FbxGeometryElement::eByPolygonVertex)
+                    {
+                        if (refmode == FbxGeometryElement::eIndexToDirect)
+                        {
+                            FbxLayerElementArrayTemplate<int>* index = &element->GetIndexArray();
+                            // FbxColor取得
+                            FbxVector4 v = element->GetDirectArray().GetAt(index->GetAt(index_of_control_point));
+                            // DWORD型のカラー作成        
+                            vertex.TangentU.x = (float)v[0];
+                            vertex.TangentU.y = (float)v[1];
+                            vertex.TangentU.z = (float)v[2];
+                        }
+                    }
+                    else
+                    {
+                        vertex.TangentU.x = 0;
+                        vertex.TangentU.y = 0;
+                        vertex.TangentU.z = 0;
+                    }
+
+                    bone_influences_per_control_point influences_per_control_point = bone_influences.at(index_of_control_point);
+
+                    for (size_t bone_index = 0; bone_index < influences_per_control_point.size(); ++bone_index)
+                    {
+
+                        if (bone_index < MAX_BONE_INFLUENCES)
+                        {
+                            vertex.BoneIndices[bone_index] = influences_per_control_point.at(bone_index).index;
+                            vertex.BoneWeights[bone_index] = influences_per_control_point.at(bone_index).weight;
+                        }
+                    }
+
+                    vertices.push_back(vertex);
+
+                    indices.at(index_offset + index_of_vertex) = static_cast<uint16_t>(vertex_count);
+
+
+                    vertex_count += 1;
+                }
+                subset.index_count += 3;
+            }
+
+            auto geo = std::make_unique<MeshGeometry>();
+            geo->Name = mesh.name;
+
+            int submeshIndex = 0;
+            for (auto& subset : mesh.subsets)
+            {
+                subset.name = mesh.name + std::to_string(submeshIndex);
+
+                SubmeshGeometry submesh;
+                submesh.IndexCount = subset.index_count;
+                submesh.StartIndexLocation = subset.index_start;
+                submesh.BaseVertexLocation = 0;
+                submesh.Bounds = BoundingBox();
+
+                geo->DrawArgs[subset.name] = submesh;
+                submeshIndex++;
+
+            }
+
+            const UINT vbByteSize = (UINT)vertices.size() * sizeof(SkinnedVertex);
+            const UINT ibByteSize = (UINT)indices.size() * sizeof(uint16_t);
+
+            ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+            CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+            ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+            CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+            geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+                mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+
+            geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+                mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+            geo->VertexByteStride = sizeof(SkinnedVertex);
+            geo->VertexBufferByteSize = vbByteSize;
+            geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+            geo->IndexBufferByteSize = ibByteSize;
+
+            mGeometries[geo->Name] = std::move(geo);
+
         }
-
-        auto geo = std::make_unique<MeshGeometry>();
-        geo->Name = _filename + std::to_string(i);
-        
-        int submeshIndex = 0;
-        for (auto & item : mesh.subsets)
-        {
-            SubmeshGeometry submesh;
-            submesh.IndexCount = item.index_count;
-            submesh.StartIndexLocation = item.index_start;
-            submesh.BaseVertexLocation = 0;
-            submesh.Bounds = BoundingBox();
-
-            geo->DrawArgs["submesh" + std::to_string(submeshIndex)] = submesh;
-            submeshIndex++;
-
-        }
-
-        const UINT vbByteSize = (UINT)vertices.size() * sizeof(SkinnedVertex);
-        const UINT ibByteSize = (UINT)indices.size() * sizeof(uint16_t);
-
-        ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-        CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
-
-        ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-        CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-        geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-            mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-
-        geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-            mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-        geo->VertexByteStride = sizeof(SkinnedVertex);
-        geo->VertexBufferByteSize = vbByteSize;
-        geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-        geo->IndexBufferByteSize = ibByteSize;
-
-
-        mGeometries[geo->Name] = std::move(geo);
-        
     }
-
-
+    if (boneNodes.size() > 0)
+    {
+        scene->SetName(_filename.c_str());
+        Fetch_bone_animations(boneNodes, extra_animations);
+    }
     manager->Destroy();
-
+    
 }
+
+void Graphics::Fetch_bone_animations(std::vector<FbxNode*> bone_nodes, std::map<std::string, Skeletal_animation>& skeletal_animations, u_int sampling_rate)
+{
+    // Get the list of all the animation stack.
+    FbxArray<FbxString*> array_of_animation_stack_names;
+    bone_nodes[0]->GetScene()->FillAnimStackNameArray(array_of_animation_stack_names);
+
+    // Get the number of animations.
+    int number_of_animations = array_of_animation_stack_names.Size();
+    if (number_of_animations > 0)
+    {
+        for (size_t index_of_animation = 0; index_of_animation < number_of_animations; ++index_of_animation)
+        {
+            Skeletal_animation skeletal_animation;
+            // Get the FbxTime per animation's frame.
+            FbxTime::EMode time_mode = bone_nodes[0]->GetScene()->GetGlobalSettings().GetTimeMode();
+            FbxTime frame_time;
+            frame_time.SetTime(0, 0, 0, 1, 0, time_mode);
+            sampling_rate = sampling_rate > 0 ? sampling_rate : frame_time.GetFrameRate(time_mode);
+            float sampling_time = 1.0f / sampling_rate;
+            skeletal_animation.sampling_time = sampling_time;
+            skeletal_animation.animation_tick = 0.0f;
+            FbxString* animation_stack_name = array_of_animation_stack_names.GetAt(index_of_animation);
+
+            skeletal_animation.name = bone_nodes[0]->GetScene()->GetName();
+            
+            FbxAnimStack* current_animation_stack
+                = bone_nodes[0]->GetScene()->FindMember<FbxAnimStack>(animation_stack_name->Buffer());
+            bone_nodes[0]->GetScene()->SetCurrentAnimationStack(current_animation_stack);
+            FbxTakeInfo* take_info = bone_nodes[0]->GetScene()->GetTakeInfo(animation_stack_name->Buffer());
+            FbxTime start_time = take_info->mLocalTimeSpan.GetStart();
+            FbxTime end_time = take_info->mLocalTimeSpan.GetStop();
+            FbxTime sampling_step;
+            sampling_step.SetTime(0, 0, 1, 0, 0, time_mode);
+            sampling_step = static_cast<FbxLongLong>(sampling_step.Get() * sampling_time);
+            for (FbxTime current_time = start_time; current_time < end_time; current_time += sampling_step)
+            {
+                Skeletal skeletal;
+                skeletal.resize(bone_nodes.size());
+                for (size_t i = 0; i < bone_nodes.size(); i++)
+                {
+                    FbxSkeleton* fbx_skeletal = bone_nodes[i]->GetSkeleton();
+
+                    const FbxAMatrix& transform = bone_nodes[i]->EvaluateGlobalTransform(current_time) *
+                        mCluster_global_init_position[i].Inverse() * mReference_global_init_position[i];
+                    Bone& bone = skeletal.at(i);
+                    // convert FbxAMatrix(transform) to XMDLOAT4X4(bone_node.transform)
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        for (int j = 0; j < 4; ++j)
+                        {
+                            bone.transform.m[i][j] = transform[i][j];
+                        }
+                    }
+                }
+                skeletal_animation.push_back(skeletal);
+            }
+            skeletal_animations[skeletal_animation.name] = skeletal_animation;
+
+        }
+        for (int i = 0; i < number_of_animations; i++)
+        {
+            delete array_of_animation_stack_names[i];
+        }
+    }
+}
+

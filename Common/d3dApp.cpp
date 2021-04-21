@@ -199,8 +199,11 @@ void D3DApp::OnResize()
     optClear.Format = mDepthStencilFormat;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
+
+	D3D12_HEAP_PROPERTIES defaultHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
     ThrowIfFailed(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        &defaultHeap,
 		D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
 		D3D12_RESOURCE_STATE_COMMON,
@@ -216,8 +219,9 @@ void D3DApp::OnResize()
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), &dsvDesc, DepthStencilView());
 
     // Transition the resource from its initial state to be used as a depth buffer.
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
-		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
+		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	mCommandList->ResourceBarrier(1, &barrier);
 	
     // Execute the resize commands.
     ThrowIfFailed(mCommandList->Close());
@@ -376,7 +380,7 @@ LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 bool D3DApp::InitMainWindow()
 {
-	WNDCLASS wc;
+	WNDCLASSW wc;
 	wc.style         = CS_HREDRAW | CS_VREDRAW;
 	wc.lpfnWndProc   = MainWndProc; 
 	wc.cbClsExtra    = 0;
@@ -388,9 +392,9 @@ bool D3DApp::InitMainWindow()
 	wc.lpszMenuName  = 0;
 	wc.lpszClassName = L"MainWnd";
 
-	if( !RegisterClass(&wc) )
+	if( !RegisterClassW(&wc) )
 	{
-		MessageBox(0, L"RegisterClass Failed.", 0, 0);
+		MessageBoxW(0, L"RegisterClass Failed.", 0, 0);
 		return false;
 	}
 
@@ -400,11 +404,11 @@ bool D3DApp::InitMainWindow()
 	int width  = R.right - R.left;
 	int height = R.bottom - R.top;
 
-	mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(), 
+	mhMainWnd = CreateWindowW(L"MainWnd", mMainWndCaption.c_str(), 
 		WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, mhAppInst, 0); 
 	if( !mhMainWnd )
 	{
-		MessageBox(0, L"CreateWindow Failed.", 0, 0);
+		MessageBoxW(0, L"CreateWindow Failed.", 0, 0);
 		return false;
 	}
 
@@ -595,7 +599,7 @@ void D3DApp::CalculateFrameStats()
             L"    fps: " + fpsStr +
             L"   mspf: " + mspfStr;
 
-        SetWindowText(mhMainWnd, windowText.c_str());
+        SetWindowTextW(mhMainWnd, windowText.c_str());
 		
 		// Reset for next average.
 		frameCnt = 0;
@@ -617,7 +621,7 @@ void D3DApp::LogAdapters()
         text += desc.Description;
         text += L"\n";
 
-        OutputDebugString(text.c_str());
+        OutputDebugStringW(text.c_str());
 
         adapterList.push_back(adapter);
         
@@ -643,7 +647,7 @@ void D3DApp::LogAdapterOutputs(IDXGIAdapter* adapter)
         std::wstring text = L"***Output: ";
         text += desc.DeviceName;
         text += L"\n";
-        OutputDebugString(text.c_str());
+        OutputDebugStringW(text.c_str());
 
         LogOutputDisplayModes(output, mBackBufferFormat);
 
@@ -674,7 +678,7 @@ void D3DApp::LogOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format)
             L"Refresh = " + std::to_wstring(n) + L"/" + std::to_wstring(d) +
             L"\n";
 
-        ::OutputDebugString(text.c_str());
+        ::OutputDebugStringW(text.c_str());
     }
 }
 
@@ -723,7 +727,7 @@ void D3DApp::GetAdapter(IDXGIAdapter1** ppAdapter)
 	text += desc.Description;
 	text += L"\n**************************\n";
 
-	OutputDebugString(text.c_str());
+	OutputDebugStringW(text.c_str());
 
 	*ppAdapter = adapter.Detach();
 }

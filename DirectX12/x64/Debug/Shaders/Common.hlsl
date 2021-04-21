@@ -38,7 +38,7 @@ struct MaterialData
     float4x4 MatTransform;
     uint     DiffuseMapIndex;
     uint     NormalMapIndex;
-    uint     MatPad0;
+    uint     SpecularMapIndex;
     uint     MatPad1;
 };
 
@@ -84,7 +84,7 @@ cbuffer cbPerObject : register(b0)
 
 cbuffer cbSkinned : register(b1)
 {
-    float4x4 gBoneTransforms[128];
+    row_major float4x4 gBoneTransforms[128];
 };
 
 
